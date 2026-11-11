@@ -39,7 +39,7 @@
   letter-spacing: -.7px;
   margin-bottom: 8px;
 }
-.auth-description, .auth-card > p { color: #878d9b; font-size: 13px; }
+.auth-description, .auth-card > p { color: #5f6674; font-size: 13px; }
 .login-form { display: grid; gap: 10px; margin-top: 25px; }
 .login-form label, .support-create-form label {
   color: #414654;
@@ -162,8 +162,9 @@
 .support-ticket-table td { border-top: 1px solid #f0f1f4; color: #555b69; font-size: 11px; padding: 13px 16px; }
 .support-ticket-table td:first-child { min-width: 245px; }
 .support-ticket-table td:first-child strong, .support-ticket-table td:first-child small { display: block; }
-.support-ticket-table td:first-child strong { color: #373c48; font-size: 11px; font-weight: 600; }
-.support-ticket-table td:first-child small { color: #989daa; font-size: 10px; margin-top: 5px; }
+.support-ticket-table tbody tr { height: 56px; }
+.support-ticket-table td:first-child strong { color: #373c48; font-size: 11px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.support-ticket-table td:first-child small { color: #989daa; font-size: 10px; margin-top: 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .support-ticket-table .field-group { min-width: 108px; }
 .support-ticket-table .support-ticket-select { background: #fff; border: 1px solid #e8eaf0; border-radius: 5px; color: #5c6270; font-size: 10px; max-width: 145px; min-height: 30px; padding: 4px 7px; }
 .support-ticket-table .ticket-priority { display: inline-flex; }
@@ -180,6 +181,15 @@
 .support-overview { margin: 0 auto; max-width: 1080px; min-height: 100vh; padding: 70px 32px; }
 .support-overview h1 { margin-bottom: 9px; }
 .support-overview .support-stats { margin: 28px 0; }
+.support-settings { background: white; border: 1px solid #eff0f4; border-radius: 10px; margin: 28px 0 18px; max-width: 620px; padding: 22px; }
+.support-settings h2 { color: #303440; font-size: 15px; margin: 0 0 18px; }
+.support-settings dl { display: grid; gap: 14px; margin: 0; }
+.support-settings dl > div { display: grid; gap: 4px; }
+.support-settings dt { color: #888e9c; font-size: 11px; }
+.support-settings dd { color: #303440; font-size: 13px; margin: 0; }
+.support-settings > p { border-top: 1px solid #eff0f4; color: #888e9c; font-size: 11px; line-height: 1.6; margin: 18px 0 0; padding-top: 14px; }
+.route-loading { align-items: center; display: flex; justify-content: center; min-height: 100vh; }
+.route-loading p { color: #656b79; font-size: 13px; }
 
 @media (max-width: 1050px) {
   .support-content { padding-right: 24px; padding-left: 24px; }

@@ -42,6 +42,34 @@ Select **Demo accounts** on the login page to populate an account. Agents see on
 
 This is deliberately a frontend-only exercise. Browser storage and frontend role checks can be changed or bypassed and are **not security controls**. In production, the backend must authenticate the session and authorize every ticket/API operation; a production system should also use an appropriately protected session/token strategy and server-side validation. The mock password and role values are public demo data, not secrets.
 
+## Performance and frontend security
+
+- Ticket search waits 250 ms before filtering and uses `useDeferredValue` so typing stays responsive. Filtering and role-scoped ticket counts are memoized; the ticket selector returns the same result when unrelated employee state changes.
+- The shared `DataTable` uses TanStack Virtual for ticket result sets of 100 or more. It keeps pagination at 50 rows and mounts only the visible rows plus overscan, with stable ticket IDs as React keys. Fixed ticket-row sizing keeps the virtual scroll offsets predictable. The existing React Compiler and memoized ticket column/callback props avoid adding blanket `React.memo` wrappers.
+- Login, ticket, employee, team/admin dashboard, and settings pages are loaded through route-level dynamic imports with an accessible Suspense fallback. The production build reports separate page chunks.
+- The app has no image assets and no real ticket API. The remote Google Fonts import was removed in favor of system fonts, avoiding a third-party font request and font-induced layout shifts. Search, pagination, and CRUD operate on local Redux/localStorage data; server-side pagination and request cancellation are not applicable until a backend API exists. There are currently zero API requests.
+- No `dangerouslySetInnerHTML` is used; React renders user-entered ticket text as text. Client validation and role-gated controls are UX only, not authorization. The demo identity is stored in `localStorage` and must not be used for real credentials or tokens. Production authentication and authorization belong on the backend; HTTPS, CSRF protections for cookie sessions, and CSP response headers must be configured by the production API/hosting environment. Do not put secrets in `VITE_*` variables.
+
+### Measured bundle comparison
+
+The production build immediately before these optimizations emitted one JavaScript entry chunk at **361.42 kB raw / 115.67 kB gzip**. The build after route splitting emits an initial entry chunk at **224.69 kB raw / 70.64 kB gzip** (about 38% smaller in both measures), with page code in separate chunks, including TicketDashboard at **15.46 kB raw / 5.31 kB gzip**.
+
+One Lighthouse 12.8.2 run on each production `/login` page, on the same local Chrome machine and default Lighthouse throttling, measured:
+
+| Metric | Before | After |
+|---|---:|---:|
+| Performance score | 92 | 99 |
+| Accessibility score | 95 | 100 |
+| First Contentful Paint | 2.69 s | 1.59 s |
+| Largest Contentful Paint | 2.69 s | 1.59 s |
+| Total Blocking Time | 0 ms | 10 ms |
+| Cumulative Layout Shift | 0 | 0 |
+| Lighthouse page resource requests | 7 | 6 |
+
+These are single-run local login-page measurements, not production user data. Lighthouse's lab run did not collect INP. The accessibility audit found a low-contrast login text issue and brand-label mismatch before the fix; both were resolved and the final login audit passed. React DevTools Profiler recordings have not been captured. The localStorage mock has no API traffic to compare.
+
+`npm audit --omit=dev` reports no production dependency vulnerabilities. The full audit reports four moderate findings through the ESLint/minimatch development-tooling dependency chain; npm's suggested automatic fix would downgrade ESLint across a major version, so it was not applied.
+
 ### Frontend system design
 
 - **Feature-based organization:** routes use feature entry points, with auth, ticket, employee and dashboard code grouped under `src/features/`. Shared UI remains separate from domain-specific components. The shared table demonstrates reuse across both employee and ticket data. Customer and standalone user-management modules do not exist in this project, so they are not represented with invented sample data.
@@ -96,4 +124,4 @@ Search matches a name or email; department and status filters are combined with 
 - Check total/active/inactive counts and the average salary before and after changes.
 - At mobile width, confirm cards, controls, dialogs, and keyboard focus remain usable.
 
-No screenshots or automated test suite are currently included.
+No screenshots or React Profiler recordings are currently included. Automated Vitest and React Testing Library tests cover the application and virtualization behavior.

@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { createAppStore } from '../app/store';
+import { demoAccounts } from '../features/auth';
 import { employeeAdded } from '../features/employees/state/employeeSlice';
 import { ticketsReplaced } from '../features/tickets/state/ticketSlice';
+import { makeSelectTicketViewForUser } from '../features/tickets/state/ticketSelectors';
 
 afterEach(() => {
   window.localStorage.clear();
@@ -71,5 +73,25 @@ describe('Redux Toolkit store', () => {
       .toContainEqual(employee);
     expect(JSON.parse(window.localStorage.getItem('supportdesk.tickets') ?? '[]'))
       .toContainEqual(expect.objectContaining({ id: 'ticket-test' }));
+  });
+
+  it('keeps the memoized ticket view stable for unrelated Redux updates', () => {
+    const store = createAppStore();
+    const selectTicketView = makeSelectTicketViewForUser();
+    const administrator = demoAccounts[0];
+    const firstView = selectTicketView(store.getState(), administrator);
+
+    store.dispatch(employeeAdded({
+      id: 'employee-test',
+      name: 'Taylor Test',
+      email: 'taylor@example.com',
+      role: 'Designer',
+      department: 'Design',
+      salary: 80000,
+      status: 'Active',
+      joiningDate: '2024-01-01',
+    }));
+
+    expect(selectTicketView(store.getState(), administrator)).toBe(firstView);
   });
 });

@@ -1,5 +1,8 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { Loader } from '../Feedback';
+
+const estimateTicketRowHeight = () => 56;
 
 export interface ColumnDefinition<T> {
   key: keyof T | string;
@@ -40,6 +43,7 @@ export interface DataTableProps<T> {
   pagination?: DataTablePaginationConfig;
   rowSelection?: DataTableRowSelection<T>;
   initialSort?: { key: keyof T | string; direction?: 'asc' | 'desc' } | null;
+  virtualized?: boolean;
 }
 
 function getColumnValue<T>(row: T, column: Pick<ColumnDefinition<T>, 'key' | 'accessor'>): unknown {
@@ -94,6 +98,7 @@ export function DataTable<T>({
   pagination,
   rowSelection,
   initialSort = null,
+  virtualized = false,
 }: DataTableProps<T>) {
   const [sortState, setSortState] = useState<{ key: keyof T | string; direction: 'asc' | 'desc' } | null>(
     initialSort
@@ -102,6 +107,8 @@ export function DataTable<T>({
   );
 
   const [internalPage, setInternalPage] = useState(1);
+  const scrollElementRef = useRef<HTMLDivElement>(null);
+  const getScrollElement = useCallback(() => scrollElementRef.current, []);
   const pageSize = pagination?.pageSize ?? (data.length || 10);
   const currentPage = pagination?.page ?? internalPage;
 
@@ -127,6 +134,19 @@ export function DataTable<T>({
   }, [pagination, pageSize, safePage, sortedData]);
 
   const visibleRows = pagination ? paginatedData : sortedData;
+  const virtualizer = useVirtualizer({
+    count: virtualized ? visibleRows.length : 0,
+    getScrollElement,
+    estimateSize: estimateTicketRowHeight,
+    initialRect: { width: 800, height: 520 },
+    overscan: 6,
+    enabled: virtualized,
+  });
+  const virtualItems = virtualized ? virtualizer.getVirtualItems() : [];
+  const topSpacerHeight = virtualItems[0]?.start ?? 0;
+  const bottomSpacerHeight = virtualized && virtualItems.length
+    ? Math.max(0, virtualizer.getTotalSize() - (virtualItems.at(-1)?.end ?? 0))
+    : 0;
 
   const handleSort = (column: ColumnDefinition<T>) => {
     if (!column.sortable) return;
@@ -171,9 +191,17 @@ export function DataTable<T>({
   }
 
   return (
-    <div className={`data-table ${className}`.trim()}>
-      <div className="data-table__scroll">
-        <table className={tableClassName}>
+    <div className={`data-table ${virtualized ? 'data-table--virtualized' : ''} ${className}`.trim()}>
+      <div
+        ref={scrollElementRef}
+        className="data-table__scroll"
+        tabIndex={virtualized ? 0 : undefined}
+        aria-label={virtualized && caption ? `${caption} list` : undefined}
+      >
+        <table
+          className={tableClassName}
+          aria-rowcount={virtualized ? totalItems + 1 : undefined}
+        >
           {caption && <caption className="sr-only">{caption}</caption>}
           <thead>
             <tr>
@@ -205,12 +233,33 @@ export function DataTable<T>({
             </tr>
           </thead>
           <tbody>
-            {visibleRows.map((row, rowIndex) => {
+            {virtualized && topSpacerHeight > 0 && (
+              <tr aria-hidden="true">
+                <td
+                  colSpan={columns.length + Number(selectionEnabled) + Number(Boolean(rowActions))}
+                  style={{ height: topSpacerHeight, padding: 0, border: 0 }}
+                />
+              </tr>
+            )}
+            {(virtualized
+              ? virtualItems.map((item) => item.index)
+              : visibleRows.map((_, index) => index)
+            ).map((rowIndex) => {
+              const row = visibleRows[rowIndex];
+              const virtualItem = virtualized ? virtualItems.find((item) => item.index === rowIndex) : undefined;
+              if (!row) return null;
               const rowId = getRowId?.(row) ?? JSON.stringify(row) ?? String(rowIndex);
               const isSelected = rowSelection ? selectedIds.includes(rowId) : false;
 
               return (
-                <tr key={rowId} onClick={() => onRowClick?.(row, rowIndex)}>
+                <tr
+                  key={rowId}
+                  data-index={virtualItem?.index}
+                  aria-rowindex={virtualized
+                    ? (safePage - 1) * pageSize + rowIndex + 2
+                    : undefined}
+                  onClick={() => onRowClick?.(row, rowIndex)}
+                >
                   {selectionEnabled && (
                     <td>
                       <input
@@ -240,6 +289,14 @@ export function DataTable<T>({
                 </tr>
               );
             })}
+            {virtualized && bottomSpacerHeight > 0 && (
+              <tr aria-hidden="true">
+                <td
+                  colSpan={columns.length + Number(selectionEnabled) + Number(Boolean(rowActions))}
+                  style={{ height: bottomSpacerHeight, padding: 0, border: 0 }}
+                />
+              </tr>
+            )}
           </tbody>
         </table>
       </div>

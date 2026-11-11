@@ -5,7 +5,10 @@ import { useState } from 'react';
 import { DataTable, Modal } from '../components/ui';
 import { usePagination } from '../hooks/usePagination';
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 interface Person {
   id: string;
@@ -97,6 +100,30 @@ describe('DataTable', () => {
 
     await user.click(screen.getByRole('checkbox', { name: 'Select row 2' }));
     expect(onSelect).toHaveBeenCalledWith(people[0], true);
+  });
+
+  it('virtualizes large datasets so only a small window of rows is mounted', () => {
+    vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockImplementation(function (this: HTMLElement) {
+      return this.classList.contains('data-table__scroll') ? 520 : 0;
+    });
+    const largeDataset = Array.from({ length: 1000 }, (_, index) => ({
+      id: `ticket-${index}`,
+      name: `Ticket ${index}`,
+      age: index,
+    }));
+
+    const { container } = render(
+      <DataTable
+        data={largeDataset}
+        columns={columns}
+        getRowId={(ticket) => ticket.id}
+        virtualized
+        caption="Large ticket list"
+      />,
+    );
+    const renderedRows = container.querySelectorAll('tbody tr[data-index]');
+    expect(renderedRows.length).toBeGreaterThan(0);
+    expect(renderedRows.length).toBeLessThan(30);
   });
 });
 

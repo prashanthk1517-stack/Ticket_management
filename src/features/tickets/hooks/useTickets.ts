@@ -5,7 +5,6 @@ import {
   assignTicket,
   createTicket,
   deleteTicket,
-  getTicketsForUser,
   updateTicketDetails,
   updateTicketPriority,
   updateTicketStatus,
@@ -18,14 +17,16 @@ import type {
   TicketStatus,
 } from '../../../types/ticket.types';
 import { ticketsReplaced } from '../state/ticketSlice';
+import { makeSelectTicketViewForUser } from '../state/ticketSelectors';
+
+const supportAgents = demoAccounts.filter((account) => account.role === 'supportAgent');
 
 export function useTickets(user: AuthUser) {
   const dispatch = useAppDispatch();
+  const selectTicketView = useMemo(makeSelectTicketViewForUser, []);
   const allTickets = useAppSelector((state) => state.tickets);
-
-  const visibleTickets = useMemo(
-    () => getTicketsForUser(user, allTickets),
-    [allTickets, user],
+  const { tickets: visibleTickets, counts } = useAppSelector(
+    (state) => selectTicketView(state, user),
   );
 
   const addTicket = useCallback(
@@ -73,12 +74,13 @@ export function useTickets(user: AuthUser) {
 
   return {
     tickets: visibleTickets,
+    counts,
     addTicket,
     editTicket,
     changeStatus,
     changePriority,
     reassignTicket,
     removeTicket,
-    agents: demoAccounts.filter((account) => account.role === 'supportAgent'),
+    agents: supportAgents,
   };
 }

@@ -44,7 +44,7 @@ export function LoginPage() {
   return (
     <main className="auth-page">
       <section className="auth-card" aria-labelledby="login-title">
-        <a className="auth-brand" href="/" aria-label="SupportDesk home">
+        <a className="auth-brand" href="/">
           <span aria-hidden="true">S</span> SupportDesk
         </a>
         <p className="eyebrow">CUSTOMER SUPPORT</p>

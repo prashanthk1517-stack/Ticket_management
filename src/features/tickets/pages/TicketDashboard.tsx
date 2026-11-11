@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useCallback, useDeferredValue, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Button,
@@ -34,15 +34,14 @@ const emptyDraft: NewTicket = {
   assignedTo: null,
 };
 
-function getTicketCounts(tickets: Ticket[]) {
-  return tickets.reduce(
-    (counts, ticket) => {
-      counts[ticket.status] += 1;
-      return counts;
-    },
-    { Open: 0, 'In progress': 0, Resolved: 0 },
-  );
-}
+const priorityOptions = ['Low', 'Medium', 'High'].map((priority) => ({
+  value: priority,
+  label: priority,
+}));
+const statusOptions = ['Open', 'In progress', 'Resolved'].map((status) => ({
+  value: status,
+  label: status,
+}));
 
 export function TicketDashboard() {
   const { user, logout } = useAuth();
@@ -67,6 +66,7 @@ function TicketDashboardContent({
     reassignTicket,
     removeTicket,
     agents,
+    counts,
   } = useTickets(user);
   const [draft, setDraft] = useState<NewTicket>(emptyDraft);
   const [editingTicket, setEditingTicket] = useState<Ticket | null>(null);
@@ -74,13 +74,13 @@ function TicketDashboardContent({
   const [notice, setNotice] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const debouncedSearch = useDebounce(searchTerm, 250);
+  const deferredSearch = useDeferredValue(debouncedSearch);
+  const isSearchPending = searchTerm !== deferredSearch;
   const { isOpen, open, close } = useModal(false);
   const deleteModal = useModal(false);
   const [ticketToDelete, setTicketToDelete] = useState<Ticket | null>(null);
-  const counts = useMemo(() => getTicketCounts(tickets), [tickets]);
-
   const filteredTickets = useMemo(() => {
-    const query = debouncedSearch.trim().toLowerCase();
+    const query = deferredSearch.trim().toLowerCase();
     if (!query) return tickets;
 
     return tickets.filter(
@@ -89,14 +89,14 @@ function TicketDashboardContent({
         ticket.subject.toLowerCase().includes(query) ||
         ticket.customer.toLowerCase().includes(query),
     );
-  }, [debouncedSearch, tickets]);
+  }, [deferredSearch, tickets]);
 
-  const pagination = usePagination(filteredTickets.length, { initialPageSize: 5 });
+  const pagination = usePagination(filteredTickets.length, { initialPageSize: 50 });
   useEffect(() => {
     pagination.setPage(1);
-  }, [debouncedSearch, pagination.setPage]);
+  }, [deferredSearch, pagination.setPage]);
 
-  function runAction(action: () => void, message: string) {
+  const runAction = useCallback((action: () => void, message: string) => {
     setError('');
     setNotice('');
     try {
@@ -109,7 +109,7 @@ function TicketDashboardContent({
           : 'Unable to complete this action.',
       );
     }
-  }
+  }, []);
 
   function openCreateForm() {
     setEditingTicket(null);
@@ -117,7 +117,7 @@ function TicketDashboardContent({
     open();
   }
 
-  function openEditForm(ticket: Ticket) {
+  const openEditForm = useCallback((ticket: Ticket) => {
     setEditingTicket(ticket);
     setDraft({
       subject: ticket.subject,
@@ -127,7 +127,7 @@ function TicketDashboardContent({
       assignedTo: ticket.assignedTo,
     });
     open();
-  }
+  }, [open]);
 
   function closeTicketForm() {
     close();
@@ -153,10 +153,10 @@ function TicketDashboardContent({
     }, editingTicket ? 'Ticket updated.' : 'Ticket created.');
   }
 
-  function requestDelete(ticket: Ticket) {
+  const requestDelete = useCallback((ticket: Ticket) => {
     setTicketToDelete(ticket);
     deleteModal.open();
-  }
+  }, [deleteModal.open]);
 
   function handleDelete() {
     if (!ticketToDelete) return;
@@ -171,7 +171,14 @@ function TicketDashboardContent({
   const canSetPriority = checkPermission('updateTicketPriority');
   const canDelete = checkPermission('deleteTicket');
   const roleLabel = getRoleLabel(user.role);
-  const columns: ColumnDefinition<Ticket>[] = [
+  const agentOptions = useMemo(
+    () => [
+      { value: '', label: 'Unassigned' },
+      ...agents.map((agent) => ({ value: agent.id, label: agent.name })),
+    ],
+    [agents],
+  );
+  const columns = useMemo<ColumnDefinition<Ticket>[]>(() => [
     {
       key: 'subject',
       header: 'Ticket',
@@ -207,10 +214,7 @@ function TicketDashboardContent({
                 `${ticket.id} assignment updated.`,
               )
             }
-            options={[
-              { value: '', label: 'Unassigned' },
-              ...agents.map((agent) => ({ value: agent.id, label: agent.name })),
-            ]}
+            options={agentOptions}
           />
         ) : assignee?.name ?? 'Unassigned';
       },
@@ -231,10 +235,7 @@ function TicketDashboardContent({
               `${ticket.id} priority updated.`,
             )
           }
-          options={['Low', 'Medium', 'High'].map((priority) => ({
-            value: priority,
-            label: priority,
-          }))}
+          options={priorityOptions}
         />
       ) : (
         <Badge
@@ -261,14 +262,43 @@ function TicketDashboardContent({
               `${ticket.id} status updated.`,
             )
           }
-          options={['Open', 'In progress', 'Resolved'].map((status) => ({
-            value: status,
-            label: status,
-          }))}
+          options={statusOptions}
         />
       ),
     },
-  ];
+  ], [
+    agentOptions,
+    agents,
+    canAssign,
+    canSetPriority,
+    changePriority,
+    changeStatus,
+    reassignTicket,
+    runAction,
+  ]);
+  const renderTicketActions = useCallback((ticket: Ticket) => (
+    <div className="support-row-actions">
+      {canEdit && (
+        <Button
+          variant="ghost"
+          onClick={() => openEditForm(ticket)}
+          aria-label={`Edit ${ticket.id}`}
+        >
+          Edit
+        </Button>
+      )}
+      {canDelete && (
+        <Button
+          variant="ghost"
+          className="support-delete"
+          onClick={() => requestDelete(ticket)}
+          aria-label={`Delete ${ticket.id}`}
+        >
+          Delete
+        </Button>
+      )}
+    </div>
+  ), [canDelete, canEdit, openEditForm, requestDelete]);
 
   return (
     <div className="support-shell">
@@ -297,6 +327,9 @@ function TicketDashboardContent({
               <span aria-hidden="true">♙</span> Employee directory
             </Link>
           )}
+          <Link className="support-nav-link" to="/settings">
+            <span aria-hidden="true">⚙</span> Settings
+          </Link>
         </nav>
         <div className="support-sidebar-footer">
           <p>Demo workspace</p>
@@ -428,11 +461,15 @@ function TicketDashboardContent({
                 placeholder="Search tickets"
                 onChange={(event) => setSearchTerm(event.target.value)}
               />
+              {isSearchPending && (
+                <span className="sr-only" role="status">Updating ticket results</span>
+              )}
             </div>
             <DataTable
               data={filteredTickets}
               columns={columns}
               getRowId={(ticket) => ticket.id}
+              virtualized={filteredTickets.length >= 100}
               tableClassName="support-ticket-table"
               className="support-table-scroll"
               caption="Customer support tickets"
@@ -448,29 +485,7 @@ function TicketDashboardContent({
                 totalItems: filteredTickets.length,
                 onPageChange: pagination.setPage,
               }}
-              rowActions={canDelete || canEdit ? (ticket) => (
-                <div className="support-row-actions">
-                  {canEdit && (
-                    <Button
-                      variant="ghost"
-                      onClick={() => openEditForm(ticket)}
-                      aria-label={`Edit ${ticket.id}`}
-                    >
-                      Edit
-                    </Button>
-                  )}
-                  {canDelete && (
-                    <Button
-                      variant="ghost"
-                      className="support-delete"
-                      onClick={() => requestDelete(ticket)}
-                      aria-label={`Delete ${ticket.id}`}
-                    >
-                      Delete
-                    </Button>
-                  )}
-                </div>
-              ) : undefined}
+              rowActions={canDelete || canEdit ? renderTicketActions : undefined}
             />
           </section>
           <Modal

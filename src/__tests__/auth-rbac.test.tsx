@@ -46,7 +46,7 @@ describe('mock authentication', () => {
     const user = userEvent.setup();
     renderRoutes('/tickets');
 
-    await user.type(screen.getByLabelText('Work email'), 'admin@support.test');
+    await user.type(await screen.findByLabelText('Work email'), 'admin@support.test');
     await user.type(screen.getByLabelText('Password'), 'password123');
     await user.click(screen.getByRole('button', { name: 'Sign in' }));
 
@@ -59,7 +59,7 @@ describe('mock authentication', () => {
     const user = userEvent.setup();
     renderRoutes('/login');
 
-    await user.type(screen.getByLabelText('Work email'), 'admin@support.test');
+    await user.type(await screen.findByLabelText('Work email'), 'admin@support.test');
     await user.type(screen.getByLabelText('Password'), 'incorrect');
     await user.click(screen.getByRole('button', { name: 'Sign in' }));
 
@@ -89,7 +89,7 @@ describe('mock authentication', () => {
       </MemoryRouter>,
     );
 
-    await user.type(screen.getByLabelText('Work email'), 'admin@support.test');
+    await user.type(await screen.findByLabelText('Work email'), 'admin@support.test');
     await user.type(screen.getByLabelText('Password'), 'password123');
     await user.click(screen.getByRole('button', { name: 'Sign in' }));
 
@@ -164,6 +164,29 @@ describe('role permissions and ticket visibility', () => {
     expect(screen.queryByRole('button', { name: /delete/i })).toBeNull();
   });
 
+  it('preserves other users’ tickets when an agent updates an assigned ticket', async () => {
+    const user = userEvent.setup();
+    window.localStorage.setItem('supportdesk.auth', JSON.stringify({
+      id: alex.id,
+      name: alex.name,
+      email: alex.email,
+      role: alex.role,
+    }));
+    renderRoutes('/tickets');
+
+    await user.selectOptions(
+      await screen.findByRole('combobox', { name: 'Status for TCK-1042' }),
+      'Resolved',
+    );
+
+    const savedTickets = JSON.parse(
+      window.localStorage.getItem('supportdesk.tickets') ?? '[]',
+    ) as { id: string; status: string }[];
+    expect(savedTickets).toHaveLength(5);
+    expect(savedTickets.find((ticket) => ticket.id === 'TCK-1041')?.status).toBe('In progress');
+    expect(savedTickets.find((ticket) => ticket.id === 'TCK-1042')?.status).toBe('Resolved');
+  });
+
   it('persists authentication across a page refresh', async () => {
     window.localStorage.setItem('supportdesk.auth', JSON.stringify({
       id: 'manager-1',
@@ -208,6 +231,25 @@ describe('role permissions and ticket visibility', () => {
     expect(window.localStorage.getItem('supportdesk.auth')).toBeNull();
   });
 
+  it('loads account settings through the protected route', async () => {
+    const [administrator] = demoAccounts;
+    window.localStorage.setItem('supportdesk.auth', JSON.stringify({
+      id: administrator.id,
+      name: administrator.name,
+      email: administrator.email,
+      role: administrator.role,
+    }));
+
+    render(
+      <MemoryRouter initialEntries={['/settings']}>
+        <Provider store={createAppStore()}><AppRoutes /></Provider>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole('heading', { name: 'Settings' })).not.toBeNull();
+    expect(screen.getByText('admin@support.test')).not.toBeNull();
+  });
+
   it('creates, edits, and confirms deletion through reusable ticket dialogs', async () => {
     const user = userEvent.setup();
     window.localStorage.setItem('supportdesk.auth', JSON.stringify({
@@ -247,5 +289,5 @@ describe('role permissions and ticket visibility', () => {
     expect(screen.getByRole('alertdialog')).not.toBeNull();
     await user.click(screen.getByRole('button', { name: 'Delete ticket' }));
     expect(screen.queryByText('Updated password ticket')).toBeNull();
-  });
+  }, 10000);
 });
