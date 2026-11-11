@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { Navigate } from 'react-router-dom';
-import { useAuth } from '../../hooks/useAuth';
+import { useAuth } from '../../features/auth';
 import type { UserRole } from '../../types/auth.types';
 
 export function RoleBasedRoute({

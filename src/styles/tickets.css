@@ -141,23 +141,32 @@
 .support-stats article strong { color: #292d38; font: 700 21px 'Manrope', sans-serif; }
 .support-create-panel, .support-ticket-panel { background: white; border: 1px solid #eff0f4; border-radius: 10px; margin-bottom: 19px; }
 .support-create-panel > summary { color: #5549bb; cursor: pointer; font-size: 12px; font-weight: 700; padding: 15px 20px; }
-.support-create-form { align-items: end; border-top: 1px solid #eff0f4; display: grid; gap: 12px; grid-template-columns: 2fr 1.4fr 1fr 1.2fr auto; padding: 15px 20px; }
+.support-create-form { display: block; }
+.support-create-form .modal-body { display: grid; gap: 14px; }
 .support-create-form label { display: grid; gap: 7px; }
 .support-create-form .button { min-height: 39px; }
+.support-create-form .modal-footer { margin-top: 0; }
+.support-panel-heading .button { flex: 0 0 auto; }
 .support-alert { background: #eef8f2; border-radius: 6px; color: #28774e; font-size: 12px; margin: 0 0 12px; padding: 10px 12px; }
 .support-alert--error { background: #fff1f1; }
 .support-panel-heading { align-items: center; border-bottom: 1px solid #f0f1f4; display: flex; justify-content: space-between; padding: 19px 20px 16px; }
 .support-panel-heading h2 { color: #303440; font: 700 15px 'Manrope', sans-serif; margin-bottom: 5px; }
 .support-panel-heading p, .support-panel-heading > span { color: #969ba7; font-size: 11px; margin: 0; }
 .support-table-scroll { overflow-x: auto; }
+.support-toolbar { border-bottom: 1px solid #f0f1f4; padding: 12px 16px; }
+.support-toolbar .field-group { max-width: 320px; }
+.support-search-input { font-size: 11px; min-height: 35px; }
 .support-ticket-table { border-collapse: collapse; min-width: 810px; width: 100%; }
 .support-ticket-table th { background: #fbfbfd; color: #969ba7; font-size: 10px; font-weight: 600; padding: 11px 16px; text-align: left; }
+.support-ticket-table th button { background: none; border: 0; color: inherit; font: inherit; padding: 0; }
 .support-ticket-table td { border-top: 1px solid #f0f1f4; color: #555b69; font-size: 11px; padding: 13px 16px; }
 .support-ticket-table td:first-child { min-width: 245px; }
 .support-ticket-table td:first-child strong, .support-ticket-table td:first-child small { display: block; }
 .support-ticket-table td:first-child strong { color: #373c48; font-size: 11px; font-weight: 600; }
 .support-ticket-table td:first-child small { color: #989daa; font-size: 10px; margin-top: 5px; }
-.support-ticket-table select { background: #fff; border: 1px solid #e8eaf0; border-radius: 5px; color: #5c6270; font-size: 10px; max-width: 145px; min-height: 30px; padding: 4px 7px; }
+.support-ticket-table .field-group { min-width: 108px; }
+.support-ticket-table .support-ticket-select { background: #fff; border: 1px solid #e8eaf0; border-radius: 5px; color: #5c6270; font-size: 10px; max-width: 145px; min-height: 30px; padding: 4px 7px; }
+.support-ticket-table .ticket-priority { display: inline-flex; }
 .ticket-priority { border-radius: 12px; display: inline-block; font-size: 10px; padding: 5px 8px; }
 .ticket-priority--high { background: #fff0ef; color: #bd4d43; }
 .ticket-priority--medium { background: #fff6e8; color: #aa7a22; }
@@ -167,13 +176,13 @@
 .support-empty h3 { color: #484d59; font-size: 13px; margin-bottom: 6px; }
 .support-empty p, .support-security-note { color: #979daa; font-size: 10px; line-height: 1.6; }
 .support-security-note { margin: 0; }
+.support-delete { font-size: 10px; }
 .support-overview { margin: 0 auto; max-width: 1080px; min-height: 100vh; padding: 70px 32px; }
 .support-overview h1 { margin-bottom: 9px; }
 .support-overview .support-stats { margin: 28px 0; }
 
 @media (max-width: 1050px) {
-  .support-create-form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .support-create-form .button { grid-column: 1 / -1; }
+  .support-content { padding-right: 24px; padding-left: 24px; }
 }
 @media (max-width: 760px) {
   .support-sidebar { bottom: auto; height: auto; padding: 12px 16px; position: relative; top: auto; width: 100%; }
@@ -187,8 +196,7 @@
   .support-user-copy { display: none; }
   .support-content { padding: 26px 16px; }
   .support-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .support-create-form { grid-template-columns: 1fr; padding: 14px; }
-  .support-create-form .button { grid-column: auto; }
+  .support-create-form .modal-footer { align-items: stretch; }
   .support-overview { padding: 40px 18px; }
 }
 @media (max-width: 430px) {

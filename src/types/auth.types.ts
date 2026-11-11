@@ -11,6 +11,7 @@ export type Permission =
   | 'viewAllTickets'
   | 'createTicket'
   | 'updateTicketStatus'
+  | 'updateTicketDetails'
   | 'updateTicketPriority'
   | 'assignTicket'
   | 'deleteTicket'

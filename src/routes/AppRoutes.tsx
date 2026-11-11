@@ -1,10 +1,10 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
-import { LoginPage } from '../components/auth/LoginPage';
 import { ProtectedRoute } from '../components/layout/ProtectedRoute';
 import { RoleBasedRoute } from '../components/layout/RoleBasedRoute';
-import { EmployeeDashboard } from '../App';
-import { RoleOverview } from '../pages/Dashboard/RoleOverview';
-import { TicketDashboard } from '../pages/Dashboard/TicketDashboard';
+import { LoginPage } from '../features/auth';
+import { RoleOverview } from '../features/dashboard';
+import { EmployeeDashboard } from '../features/employees';
+import { TicketDashboard } from '../features/tickets';
 import { UnauthorizedPage } from '../pages/UnauthorizedPage';
 
 export function AppRoutes() {

@@ -12,3 +12,4 @@ export interface Ticket {
 }
 
 export type NewTicket = Omit<Ticket, 'id' | 'createdAt'>;
+export type TicketDetailsDraft = Pick<Ticket, 'subject' | 'customer' | 'priority' | 'assignedTo'>;

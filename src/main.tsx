@@ -1,7 +1,8 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+import { Provider } from 'react-redux';
 import { BrowserRouter } from 'react-router-dom';
-import { AuthProvider } from './context/AuthContext';
+import { store } from './app/store';
 import { AppRoutes } from './routes/AppRoutes';
 import './styles/app.css';
 import './styles/tickets.css';
@@ -15,9 +16,9 @@ if (!rootElement) {
 createRoot(rootElement).render(
   <StrictMode>
     <BrowserRouter>
-      <AuthProvider>
+      <Provider store={store}>
         <AppRoutes />
-      </AuthProvider>
+      </Provider>
     </BrowserRouter>
   </StrictMode>,
 );

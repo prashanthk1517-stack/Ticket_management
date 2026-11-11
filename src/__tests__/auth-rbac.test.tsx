@@ -1,27 +1,29 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it } from 'vitest';
 import { Route, Routes } from 'react-router-dom';
-import { AuthProvider } from '../context/AuthContext';
-import { LoginPage } from '../components/auth/LoginPage';
+import { Provider } from 'react-redux';
+import { createAppStore } from '../app/store';
+import { demoAccounts } from '../features/auth';
+import { LoginPage } from '../features/auth';
 import { ProtectedRoute } from '../components/layout/ProtectedRoute';
-import { TicketDashboard } from '../pages/Dashboard/TicketDashboard';
+import { TicketDashboard } from '../features/tickets';
 import { UnauthorizedPage } from '../pages/UnauthorizedPage';
 import { AppRoutes } from '../routes/AppRoutes';
-import { demoAccounts } from '../services/authService';
 import {
   deleteTicket,
   getTicketsForUser,
   loadTickets,
+  updateTicketDetails,
   updateTicketStatus,
-} from '../services/ticketService';
+} from '../features/tickets/services/ticketService';
 import { hasPermission } from '../utils/permissions';
 import { MemoryRouter } from 'react-router-dom';
 
 function renderRoutes(initialEntry = '/tickets') {
   return render(
     <MemoryRouter initialEntries={[initialEntry]}>
-      <AuthProvider>
+      <Provider store={createAppStore()}>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route element={<ProtectedRoute />}>
@@ -29,7 +31,7 @@ function renderRoutes(initialEntry = '/tickets') {
             <Route path="/unauthorized" element={<UnauthorizedPage />} />
           </Route>
         </Routes>
-      </AuthProvider>
+      </Provider>
     </MemoryRouter>,
   );
 }
@@ -83,7 +85,7 @@ describe('mock authentication', () => {
     const user = userEvent.setup();
     render(
       <MemoryRouter initialEntries={['/admin']}>
-        <AuthProvider><AppRoutes /></AuthProvider>
+        <Provider store={createAppStore()}><AppRoutes /></Provider>
       </MemoryRouter>,
     );
 
@@ -101,11 +103,14 @@ describe('role permissions and ticket visibility', () => {
   it('grants each role only its expected permissions', () => {
     expect(hasPermission(administrator, 'deleteTicket')).toBe(true);
     expect(hasPermission(administrator, 'createTicket')).toBe(true);
+    expect(hasPermission(administrator, 'updateTicketDetails')).toBe(true);
     expect(hasPermission(manager, 'assignTicket')).toBe(true);
+    expect(hasPermission(manager, 'updateTicketDetails')).toBe(true);
     expect(hasPermission(manager, 'updateTicketPriority')).toBe(true);
     expect(hasPermission(manager, 'deleteTicket')).toBe(false);
     expect(hasPermission(alex, 'updateTicketStatus')).toBe(true);
     expect(hasPermission(alex, 'updateTicketPriority')).toBe(false);
+    expect(hasPermission(alex, 'updateTicketDetails')).toBe(false);
     expect(hasPermission(alex, 'viewTeamStatistics')).toBe(false);
   });
 
@@ -122,6 +127,26 @@ describe('role permissions and ticket visibility', () => {
     expect(() => updateTicketStatus(alex, tickets, tickets[1].id, 'Resolved')).toThrow(
       'This ticket is not available',
     );
+  });
+
+  it('allows managers to edit ticket details and rejects agent edits', () => {
+    const tickets = loadTickets();
+    const ticket = tickets[0];
+    const updated = updateTicketDetails(manager, tickets, ticket.id, {
+      subject: 'Updated subject',
+      customer: ticket.customer,
+      priority: ticket.priority,
+      assignedTo: ticket.assignedTo,
+    });
+
+    expect(updated.find((item) => item.id === ticket.id)?.subject).toBe('Updated subject');
+    expect(tickets[0].subject).not.toBe('Updated subject');
+    expect(() => updateTicketDetails(alex, tickets, ticket.id, {
+      subject: 'Unauthorized edit',
+      customer: ticket.customer,
+      priority: ticket.priority,
+      assignedTo: ticket.assignedTo,
+    })).toThrow('You do not have permission');
   });
 
   it('does not render tickets belonging to another agent', async () => {
@@ -161,7 +186,7 @@ describe('role permissions and ticket visibility', () => {
     }));
     render(
       <MemoryRouter initialEntries={['/admin']}>
-        <AuthProvider><AppRoutes /></AuthProvider>
+        <Provider store={createAppStore()}><AppRoutes /></Provider>
       </MemoryRouter>,
     );
 
@@ -181,5 +206,46 @@ describe('role permissions and ticket visibility', () => {
 
     expect(await screen.findByRole('heading', { name: 'Welcome back' })).not.toBeNull();
     expect(window.localStorage.getItem('supportdesk.auth')).toBeNull();
+  });
+
+  it('creates, edits, and confirms deletion through reusable ticket dialogs', async () => {
+    const user = userEvent.setup();
+    window.localStorage.setItem('supportdesk.auth', JSON.stringify({
+      id: administrator.id,
+      name: administrator.name,
+      email: administrator.email,
+      role: administrator.role,
+    }));
+    renderRoutes('/tickets');
+
+    expect(await screen.findByRole('table', { name: 'Customer support tickets' })).not.toBeNull();
+
+    await user.click(screen.getByRole('button', { name: 'Create ticket' }));
+    expect(await screen.findByRole('dialog')).not.toBeNull();
+    await user.type(screen.getByRole('textbox', { name: /Subject/ }), 'Reusable modal ticket');
+    await user.type(screen.getByRole('textbox', { name: /Customer/ }), 'Jamie Example');
+    await user.click(screen.getByRole('button', { name: 'Add ticket' }));
+    expect(await screen.findByText('Reusable modal ticket')).not.toBeNull();
+
+    const search = screen.getByRole('searchbox', { name: 'Search tickets' });
+    await user.type(search, 'Reusable modal');
+    expect(await screen.findByText('Reusable modal ticket')).not.toBeNull();
+    await waitFor(() => {
+      expect(screen.queryByText('Unable to reset account password')).toBeNull();
+    });
+    await user.clear(search);
+    expect(await screen.findByText('Unable to reset account password')).not.toBeNull();
+
+    await user.click(screen.getByRole('button', { name: 'Edit TCK-1042' }));
+    const subjectField = screen.getByRole('textbox', { name: /Subject/ });
+    await user.clear(subjectField);
+    await user.type(subjectField, 'Updated password ticket');
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+    expect(await screen.findByText('Updated password ticket')).not.toBeNull();
+
+    await user.click(screen.getByRole('button', { name: 'Delete TCK-1042' }));
+    expect(screen.getByRole('alertdialog')).not.toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Delete ticket' }));
+    expect(screen.queryByText('Updated password ticket')).toBeNull();
   });
 });

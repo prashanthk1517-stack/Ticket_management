@@ -5,6 +5,7 @@ const rolePermissions: Record<UserRole, readonly Permission[]> = {
   administrator: [
     'viewAllTickets',
     'createTicket',
+    'updateTicketDetails',
     'updateTicketStatus',
     'updateTicketPriority',
     'assignTicket',
@@ -14,6 +15,7 @@ const rolePermissions: Record<UserRole, readonly Permission[]> = {
   ],
   supportManager: [
     'viewAllTickets',
+    'updateTicketDetails',
     'updateTicketStatus',
     'updateTicketPriority',
     'assignTicket',
