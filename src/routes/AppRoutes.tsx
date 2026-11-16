@@ -1,7 +1,7 @@
 import { lazy, Suspense } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { ProtectedRoute } from '../components/layout/ProtectedRoute';
-import { RoleBasedRoute } from '../components/layout/RoleBasedRoute';
+import { PermissionBasedRoute } from '../components/layout/PermissionBasedRoute';
 import { UnauthorizedPage } from '../pages/UnauthorizedPage';
 
 const LoginPage = lazy(() =>
@@ -29,6 +29,11 @@ const SettingsPage = lazy(() =>
     default: module.SettingsPage,
   })),
 );
+const UserManagementPage = lazy(() =>
+  import('../features/auth/pages/UserManagementPage').then((module) => ({
+    default: module.UserManagementPage,
+  })),
+);
 
 function RouteLoadingFallback() {
   return (
@@ -50,31 +55,39 @@ export function AppRoutes() {
           <Route
             path="/team"
             element={
-              <RoleBasedRoute allowedRoles={['administrator', 'supportManager']}>
+              <PermissionBasedRoute permission="viewTeamStatistics">
                 <RoleOverview
                   title="Team statistics"
                   description="Team-wide ticket volume and status distribution."
                 />
-              </RoleBasedRoute>
+              </PermissionBasedRoute>
             }
           />
           <Route
             path="/admin"
             element={
-              <RoleBasedRoute allowedRoles={['administrator']}>
+              <PermissionBasedRoute permission="viewAdminDashboard">
                 <RoleOverview
                   title="Administration"
                   description="Administrative overview for the support workspace."
                 />
-              </RoleBasedRoute>
+              </PermissionBasedRoute>
             }
           />
           <Route
             path="/employees"
             element={
-              <RoleBasedRoute allowedRoles={['administrator']}>
+              <PermissionBasedRoute permission="viewAdminDashboard">
                 <EmployeeDashboard />
-              </RoleBasedRoute>
+              </PermissionBasedRoute>
+            }
+          />
+          <Route
+            path="/users"
+            element={
+              <PermissionBasedRoute permission="manageUsers">
+                <UserManagementPage />
+              </PermissionBasedRoute>
             }
           />
         </Route>

@@ -26,28 +26,80 @@ All demo accounts use the password `password123`.
 | Support Agent | `agent.alex@support.test` |
 | Support Agent | `agent.sam@support.test` |
 
-Select **Demo accounts** on the login page to populate an account. Agents see only tickets assigned to their own account and can update their status. Managers can view all tickets, edit ticket details, assign agents, and update status and priority, but cannot create or delete tickets. Administrators can create and delete tickets and have all manager permissions.
+Select **Demo accounts** on the login page to populate an account. The permission matrix is centralized in `src/utils/permissions.ts`:
+
+| Permission | Administrator | Support Manager | Support Agent |
+|---|---:|---:|---:|
+| View tickets | All | All | Assigned only |
+| Create tickets | Yes | Yes | No |
+| Assign tickets | Yes | Yes | No |
+| Delete tickets | Yes | No | No |
+| Manage users | Yes | No | No |
+| Update ticket status | Yes | Yes | Assigned only |
+| Edit details / priority | Yes | Yes | No |
+| View team statistics | Yes | Yes | No |
+| View administration / employees | Yes | No | No |
+
+`/users` is an administrator-only explanation page; account CRUD is not implemented because the project has no user-management backend. Frontend permissions improve the UX but are not an authorization boundary.
 
 ### Architecture and security
 
 - `src/app/store.ts` configures the Redux Toolkit store, initializes persisted feature data, and saves ticket and employee updates to browser storage. `src/app/hooks.ts` exports typed Redux hooks.
 - `src/features/auth/state/authSlice.ts` owns the authenticated user and async login lifecycle. Login uses `createAsyncThunk`; the auth service validates credentials and persists the demo identity for page refreshes.
-- `src/components/layout/ProtectedRoute.tsx` guards authenticated routes and preserves the requested location. `RoleBasedRoute.tsx` gates role-specific pages.
+- `src/components/layout/ProtectedRoute.tsx` guards authenticated routes and preserves the requested location. `PermissionBasedRoute.tsx` applies the centralized permissions to restricted routes.
 - `src/utils/permissions.ts` centralizes role permissions and ticket ownership checks; `src/features/auth/hooks/usePermissions.ts` exposes reusable checks to UI components.
 - `src/features/tickets/services/ticketService.ts` provides typed mock ticket operations, role checks and ownership checks. `src/features/tickets/state/ticketSlice.ts` stores ticket data, while `useTickets` connects permission-checked service operations to Redux.
+- `src/app/api/baseApi.ts`, `src/app/api/baseQuery.ts`, and `src/features/tickets/services/ticketApi.ts` provide the shared RTK Query lifecycle for ticket reads and mutations. The local base query uses the existing ticket store/service as its demo transport and centralizes safe status-to-message mapping; it does not make HTTP requests.
 - `src/features/employees/state/employeeSlice.ts` owns employee CRUD state; `src/features/employees/services/employeeStorage.ts` handles validated local-storage hydration.
 - `src/features/tickets/pages/TicketDashboard.tsx` shows role-specific tickets, statistics and permitted actions. Ticket data is scoped before rendering; create, edit, delete, assign, priority and status actions are conditionally shown.
+- Ticket service operations validate required text, length/control characters, enum values, assignees and unexpected fields before changing local data. Ticket strings are rendered as React text, not HTML.
 - `src/components/ui/` contains the generic DataTable, controlled form fields, compound modal, buttons, badges, cards, alerts and loader.
 - `src/features/` owns auth, ticket, employee and dashboard pages, components, hooks and services. Shared UI stays outside feature-specific code.
 
 This is deliberately a frontend-only exercise. Browser storage and frontend role checks can be changed or bypassed and are **not security controls**. In production, the backend must authenticate the session and authorize every ticket/API operation; a production system should also use an appropriately protected session/token strategy and server-side validation. The mock password and role values are public demo data, not secrets.
 
+### API reliability demo
+
+The repository has no ticket backend, so the RTK Query base query intentionally adapts the existing local ticket service instead of inventing an HTTP API contract. The ticket dashboard's **API failure simulation** selector exercises the shared query/mutation lifecycle:
+
+- **Network unavailable** simulates a fetch/network failure with a connection-specific message.
+- **Slow response (loading state)** holds a successful ticket query long enough to show the loading indicator.
+- **Service unavailable (503)** simulates a transient server failure.
+- **Expired session (401)** clears the demo identity and the existing protected route redirects to `/login`. There is no refresh-token endpoint or real access token in this project, so no refresh call is made or fabricated.
+- **Forbidden (403)** displays a safe access-denied message without offering a retry.
+- **Validation failure** returns a safe 422-style message for mutations; query requests continue to succeed.
+
+Read requests retry network and 503 failures at most twice after the original request. Authentication and validation errors are never retried, and mutations are never automatically retried, avoiding duplicate creates/updates/deletes. The error view offers a manual retry for failed ticket reads. Error text is selected locally from status codes; server response details are never shown. Query arguments include the debounced search value, and RTK Query abort signals cancel superseded or unmounted requests. Existing local ticket data remains the successful demo transport and persists as before.
+
+When a backend contract becomes available, replace the local base-query adapter with the agreed HTTP transport and authentication mechanism. A 401 should clear the session and redirect to sign-in until the backend documents a supported refresh flow; do not store production tokens in browser local storage. Backend authorization remains mandatory.
+
+Ticket request-state screenshots are in [`screenshots/`](./screenshots/): [loading](./screenshots/tickets-loading.png), [network error](./screenshots/tickets-error.png), and [success](./screenshots/tickets-success.png).
+
+### Security model and verification
+
+The demo has no `.env` files, API keys, JWTs or production secrets. Its `supportdesk.auth` local-storage value is only a mock identity used to exercise routes; it is editable and must never be treated as proof of authentication. `VITE_*` values are bundled into client code, so only public configuration such as a non-secret API origin belongs there.
+
+For production, authenticate and authorize every request on the backend. Prefer a server-managed session in a cookie such as `HttpOnly; Secure; SameSite=Lax` (use `Strict` where workflows permit). Cross-site cookies require `SameSite=None; Secure` plus deliberate CSRF defenses, strict CORS allowlists and credential settings; never combine credentialed CORS with `Access-Control-Allow-Origin: *`. Validate `Origin` and use a CSRF token strategy for state-changing requests. `HttpOnly` prevents JavaScript from reading the session cookie; `Secure` restricts it to HTTPS; `SameSite` limits cross-site cookie sending. Do not store access or refresh tokens in local storage.
+
+React escapes rendered strings by default; keep ticket subjects/customers as text and do not use `dangerouslySetInnerHTML` or `eval`. A production Content Security Policy should be delivered as an HTTP response header and restrict scripts, connections, framing and object sources to the application's needs. Same-Origin Policy isolates origins by default; CORS is a server opt-in for specific trusted origins, not an authorization system. The application has no CSP/CORS server configuration because it has no backend or hosting configuration in this repository.
+
+| Security check | Expected behavior | Actual verification |
+|---|---|---|
+| Unauthenticated visit to `/tickets` | Redirect to login and preserve destination | Covered by route tests |
+| Agent opens `/users` | Show Unauthorized page | Covered by security route test |
+| Agent attempts ticket deletion | Reject with 403; preserve ticket list | Covered by service test; delete control is hidden |
+| Manager opens `/admin` | Show Unauthorized page | Covered by existing route test |
+| API returns 401 | Clear mock session and redirect to login; do not retry | Covered by API test and browser smoke check |
+| API returns 403 | Show safe access-denied message; no retry | Covered by API test |
+| Invalid / unexpected ticket input | Reject with 422-style validation feedback | Covered by service tests |
+| Script-like ticket text | Render as text, never create executable markup | Covered by dashboard test |
+
 ## Performance and frontend security
 
-- Ticket search waits 250 ms before filtering and uses `useDeferredValue` so typing stays responsive. Filtering and role-scoped ticket counts are memoized; the ticket selector returns the same result when unrelated employee state changes.
+- Ticket search waits 250 ms before filtering and uses RTK Query arguments so superseded searches can be cancelled; role-scoped ticket counts are memoized.
 - The shared `DataTable` uses TanStack Virtual for ticket result sets of 100 or more. It keeps pagination at 50 rows and mounts only the visible rows plus overscan, with stable ticket IDs as React keys. Fixed ticket-row sizing keeps the virtual scroll offsets predictable. The existing React Compiler and memoized ticket column/callback props avoid adding blanket `React.memo` wrappers.
 - Login, ticket, employee, team/admin dashboard, and settings pages are loaded through route-level dynamic imports with an accessible Suspense fallback. The production build reports separate page chunks.
-- The app has no image assets and no real ticket API. The remote Google Fonts import was removed in favor of system fonts, avoiding a third-party font request and font-induced layout shifts. Search, pagination, and CRUD operate on local Redux/localStorage data; server-side pagination and request cancellation are not applicable until a backend API exists. There are currently zero API requests.
+- The app has no image assets and no real HTTP ticket API. The RTK Query demo adapter models ticket requests locally; it makes no network requests. The remote Google Fonts import was removed in favor of system fonts, avoiding a third-party font request and font-induced layout shifts.
 - No `dangerouslySetInnerHTML` is used; React renders user-entered ticket text as text. Client validation and role-gated controls are UX only, not authorization. The demo identity is stored in `localStorage` and must not be used for real credentials or tokens. Production authentication and authorization belong on the backend; HTTPS, CSRF protections for cookie sessions, and CSP response headers must be configured by the production API/hosting environment. Do not put secrets in `VITE_*` variables.
 
 ### Measured bundle comparison
@@ -72,7 +124,7 @@ These are single-run local login-page measurements, not production user data. Li
 
 ### Frontend system design
 
-- **Feature-based organization:** routes use feature entry points, with auth, ticket, employee and dashboard code grouped under `src/features/`. Shared UI remains separate from domain-specific components. The shared table demonstrates reuse across both employee and ticket data. Customer and standalone user-management modules do not exist in this project, so they are not represented with invented sample data.
+- **Feature-based organization:** routes use feature entry points, with auth, ticket, employee and dashboard code grouped under `src/features/`. Shared UI remains separate from domain-specific components. The shared table demonstrates reuse across both employee and ticket data. There is no customer module or user-management CRUD service; `/users` only explains the backend limitation and is admin-only.
 - **Shared vs feature components:** shared controls in `src/components/ui/` are domain-neutral and configurable. Feature pages/forms compose them with ticket- or employee-specific labels, permissions, formatting and actions.
 - **Hooks vs components:** components own reusable presentation and interaction; hooks own reusable stateful behavior such as debounce, pagination, modal state, async requests and permission checks.
 - **Container vs presentation:** dashboard pages coordinate auth, services, derived data and actions. `DataTable` receives rows, columns, renderers and handlers through props, while the feature page decides what each row means and which actions are allowed.
@@ -81,13 +133,15 @@ These are single-run local login-page measurements, not production user data. Li
 - **Circular dependencies:** feature entry points are the public API, shared UI does not import feature code, and dependency direction flows from routes to features to shared/platform code.
 - **Scaling modules:** add a feature folder with its own pages, components, hooks, service layer, types and tests; reuse the generic table and field components rather than duplicating CRUD UI.
 
-The generic table is demonstrated in both the ticket dashboard and employee directory. No customer/user-management modules exist in the supplied project, so they are not fabricated with unrelated sample data.
+The generic table is demonstrated in both the ticket dashboard and employee directory. No customer or user-management CRUD module exists in the supplied project, so neither is fabricated with unrelated sample data.
 
 ### Tests and manual demo
 
-`npm test` runs Vitest and React Testing Library checks for successful/failed login, protected-route redirects and return navigation, logout, persisted authentication, role permissions, ticket detail edits, agent ticket isolation, unauthorized mutation attempts, and Redux state hydration/persistence.
+`npm test` runs Vitest and React Testing Library checks for successful/failed login, protected-route redirects and return navigation, logout, persisted authentication, role permissions, agent ticket isolation/deletion restrictions, manager/admin route restrictions, ticket validation and text rendering, Redux state hydration/persistence, and ticket API success/network/401/403/validation/retry states.
 
-To demonstrate the flow: open `/tickets` in a signed-out browser; sign in using one of the accounts above; try the agent and manager accounts to compare ticket visibility/actions; open `/team` or `/admin` for their role-specific areas; then log out. Changes are saved under `supportdesk.auth` and `supportdesk.tickets` in browser storage. Clear these keys to restore demo state.
+The starter project has no HTTP transport or MSW setup. Reliability tests exercise the deterministic RTK Query demo adapter directly; add MSW when the feature is connected to a real fetch-based API.
+
+To demonstrate the flow: open `/tickets` in a signed-out browser; sign in using one of the accounts above; try the agent and manager accounts to compare ticket visibility/actions; open `/team` or `/admin` for their role-specific areas; use **API failure simulation** to view network, 503, validation, and 401 handling; then restore **Healthy demo API** or sign back in. Changes are saved under `supportdesk.auth` and `supportdesk.tickets` in browser storage. Clear these keys to restore demo state.
 
 ## Architecture and concepts
 
@@ -124,4 +178,4 @@ Search matches a name or email; department and status filters are combined with 
 - Check total/active/inactive counts and the average salary before and after changes.
 - At mobile width, confirm cards, controls, dialogs, and keyboard focus remain usable.
 
-No screenshots or React Profiler recordings are currently included. Automated Vitest and React Testing Library tests cover the application and virtualization behavior.
+React Profiler recordings have not been captured. Automated Vitest and React Testing Library tests cover the application and virtualization behavior.

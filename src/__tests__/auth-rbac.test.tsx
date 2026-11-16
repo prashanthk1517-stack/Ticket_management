@@ -162,6 +162,9 @@ describe('role permissions and ticket visibility', () => {
     expect(screen.getByText('Unable to reset account password')).not.toBeNull();
     expect(screen.queryByText('Invoice shows an unexpected charge')).toBeNull();
     expect(screen.queryByRole('button', { name: /delete/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Create ticket' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'User management' })).toBeNull();
+    expect(screen.queryByRole('combobox', { name: 'Assign TCK-1042' })).toBeNull();
   });
 
   it('preserves other users’ tickets when an agent updates an assigned ticket', async () => {

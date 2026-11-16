@@ -16,4 +16,5 @@ export type Permission =
   | 'assignTicket'
   | 'deleteTicket'
   | 'viewAdminDashboard'
-  | 'viewTeamStatistics';
+  | 'viewTeamStatistics'
+  | 'manageUsers';

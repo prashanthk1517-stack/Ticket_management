@@ -1,18 +1,19 @@
 import type { ReactNode } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../../features/auth';
-import type { UserRole } from '../../types/auth.types';
+import type { Permission } from '../../types/auth.types';
+import { hasPermission } from '../../utils/permissions';
 
-export function RoleBasedRoute({
-  allowedRoles,
+export function PermissionBasedRoute({
+  permission,
   children,
 }: {
-  allowedRoles: readonly UserRole[];
+  permission: Permission;
   children: ReactNode;
 }) {
   const { user } = useAuth();
   if (!user) return <Navigate to="/login" replace />;
-  return allowedRoles.includes(user.role) ? (
+  return hasPermission(user, permission) ? (
     children
   ) : (
     <Navigate to="/unauthorized" replace />

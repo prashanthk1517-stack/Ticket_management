@@ -1,4 +1,5 @@
 import { configureStore, combineReducers } from '@reduxjs/toolkit';
+import { baseApi } from './api/baseApi';
 import { readStoredUser } from '../features/auth/services/authService';
 import { authReducer } from '../features/auth/state/authSlice';
 import { employeeReducer } from '../features/employees/state/employeeSlice';
@@ -13,6 +14,7 @@ const rootReducer = combineReducers({
   auth: authReducer,
   employees: employeeReducer,
   tickets: ticketReducer,
+  [baseApi.reducerPath]: baseApi.reducer,
 });
 
 export type RootState = ReturnType<typeof rootReducer>;
@@ -20,6 +22,8 @@ export type RootState = ReturnType<typeof rootReducer>;
 export function createAppStore(preloadedState?: RootState) {
   const store = configureStore({
     reducer: rootReducer,
+    middleware: (getDefaultMiddleware) =>
+      getDefaultMiddleware().concat(baseApi.middleware),
     preloadedState: preloadedState ?? {
       auth: { user: readStoredUser(), status: 'idle' },
       employees: loadEmployees(),

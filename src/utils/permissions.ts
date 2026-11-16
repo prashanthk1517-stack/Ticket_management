@@ -12,9 +12,11 @@ const rolePermissions: Record<UserRole, readonly Permission[]> = {
     'deleteTicket',
     'viewAdminDashboard',
     'viewTeamStatistics',
+    'manageUsers',
   ],
   supportManager: [
     'viewAllTickets',
+    'createTicket',
     'updateTicketDetails',
     'updateTicketStatus',
     'updateTicketPriority',
@@ -25,7 +27,7 @@ const rolePermissions: Record<UserRole, readonly Permission[]> = {
 };
 
 export function hasPermission(user: AuthUser, permission: Permission): boolean {
-  return rolePermissions[user.role].includes(permission);
+  return rolePermissions[user.role]?.includes(permission) ?? false;
 }
 
 export function canViewTicket(user: AuthUser, ticket: Ticket): boolean {

@@ -153,9 +153,15 @@
 .support-panel-heading h2 { color: #303440; font: 700 15px 'Manrope', sans-serif; margin-bottom: 5px; }
 .support-panel-heading p, .support-panel-heading > span { color: #969ba7; font-size: 11px; margin: 0; }
 .support-table-scroll { overflow-x: auto; }
-.support-toolbar { border-bottom: 1px solid #f0f1f4; padding: 12px 16px; }
+.support-toolbar { align-items: end; border-bottom: 1px solid #f0f1f4; display: flex; flex-wrap: wrap; gap: 14px; padding: 12px 16px; }
 .support-toolbar .field-group { max-width: 320px; }
 .support-search-input { font-size: 11px; min-height: 35px; }
+.support-api-error { align-items: center; display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; margin: 12px 16px; }
+.support-api-error button { background: transparent; border: 0; color: #a42d2d; cursor: pointer; font-size: 11px; font-weight: 700; padding: 4px; }
+.support-api-error button:disabled { cursor: wait; opacity: .7; }
+.support-api-loading { align-items: center; color: #737989; display: flex; font-size: 12px; gap: 9px; padding: 15px 17px; }
+.support-api-spinner { animation: support-api-spin .8s linear infinite; border: 2px solid #dcd9f5; border-radius: 50%; border-top-color: #6658d3; height: 15px; width: 15px; }
+@keyframes support-api-spin { to { transform: rotate(360deg); } }
 .support-ticket-table { border-collapse: collapse; min-width: 810px; width: 100%; }
 .support-ticket-table th { background: #fbfbfd; color: #969ba7; font-size: 10px; font-weight: 600; padding: 11px 16px; text-align: left; }
 .support-ticket-table th button { background: none; border: 0; color: inherit; font: inherit; padding: 0; }

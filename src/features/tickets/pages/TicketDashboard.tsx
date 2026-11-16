@@ -1,4 +1,4 @@
-import { useCallback, useDeferredValue, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Button,
@@ -12,12 +12,26 @@ import {
   SelectField,
   SubmitButton,
   type ColumnDefinition,
+  ApiErrorMessage,
+  EmptyState,
+  LoadingSpinner,
 } from '../../../components/ui';
 import { getRoleLabel, useAuth, usePermissions } from '../../auth';
 import { useDebounce } from '../../../hooks/useDebounce';
 import { useModal } from '../../../hooks/useModal';
 import { usePagination } from '../../../hooks/usePagination';
 import { useTickets } from '../hooks/useTickets';
+import {
+  useAssignTicketMutation,
+  useCreateTicketMutation,
+  useDeleteTicketMutation,
+  useGetTicketsQuery,
+  useUpdateTicketDetailsMutation,
+  useUpdateTicketPriorityMutation,
+  useUpdateTicketStatusMutation,
+} from '../services/ticketApi';
+import { toApiError } from '../../../components/ui/ApiStates';
+import type { TicketApiScenario } from '../../../app/api/baseQuery';
 import type {
   NewTicket,
   Ticket,
@@ -57,59 +71,60 @@ function TicketDashboardContent({
   logout: ReturnType<typeof useAuth>['logout'];
 }) {
   const { checkPermission } = usePermissions();
-  const {
-    tickets,
-    addTicket,
-    editTicket,
-    changeStatus,
-    changePriority,
-    reassignTicket,
-    removeTicket,
-    agents,
-    counts,
-  } = useTickets(user);
+  const { tickets, counts, agents } = useTickets(user);
   const [draft, setDraft] = useState<NewTicket>(emptyDraft);
   const [editingTicket, setEditingTicket] = useState<Ticket | null>(null);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const debouncedSearch = useDebounce(searchTerm, 250);
-  const deferredSearch = useDeferredValue(debouncedSearch);
-  const isSearchPending = searchTerm !== deferredSearch;
+  const isSearchPending = searchTerm !== debouncedSearch;
+  const [scenario, setScenario] = useState<TicketApiScenario>('healthy');
+  const {
+    currentData: apiTickets = [],
+    error: ticketError,
+    isError: hasTicketError,
+    isFetching,
+    isLoading,
+    refetch,
+  } = useGetTicketsQuery({ user, search: debouncedSearch, scenario });
+  const [createTicket, createTicketState] = useCreateTicketMutation();
+  const [updateTicketDetails, updateDetailsState] = useUpdateTicketDetailsMutation();
+  const [updateTicketStatus, updateStatusState] = useUpdateTicketStatusMutation();
+  const [updateTicketPriority, updatePriorityState] = useUpdateTicketPriorityMutation();
+  const [assignTicket, assignTicketState] = useAssignTicketMutation();
+  const [deleteTicket, deleteTicketState] = useDeleteTicketMutation();
+  const isMutating = createTicketState.isLoading || updateDetailsState.isLoading ||
+    updateStatusState.isLoading || updatePriorityState.isLoading ||
+    assignTicketState.isLoading || deleteTicketState.isLoading;
   const { isOpen, open, close } = useModal(false);
   const deleteModal = useModal(false);
   const [ticketToDelete, setTicketToDelete] = useState<Ticket | null>(null);
   const filteredTickets = useMemo(() => {
-    const query = deferredSearch.trim().toLowerCase();
+    const query = debouncedSearch.trim().toLowerCase();
     if (!query) return tickets;
-
-    return tickets.filter(
-      (ticket) =>
-        ticket.id.toLowerCase().includes(query) ||
-        ticket.subject.toLowerCase().includes(query) ||
-        ticket.customer.toLowerCase().includes(query),
+    return tickets.filter((ticket) =>
+      [ticket.id, ticket.subject, ticket.customer]
+        .some((value) => value.toLowerCase().includes(query)),
     );
-  }, [deferredSearch, tickets]);
-
+  }, [debouncedSearch, tickets]);
+  const displayedTickets = isLoading || isFetching ? filteredTickets : apiTickets;
   const pagination = usePagination(filteredTickets.length, { initialPageSize: 50 });
   useEffect(() => {
     pagination.setPage(1);
-  }, [deferredSearch, pagination.setPage]);
+  }, [debouncedSearch, pagination.setPage]);
 
-  const runAction = useCallback((action: () => void, message: string) => {
+  const runAction = useCallback(async (action: () => Promise<unknown>, message: string) => {
     setError('');
     setNotice('');
+    if (isMutating) return;
     try {
-      action();
+      await action();
       setNotice(message);
     } catch (actionError) {
-      setError(
-        actionError instanceof Error
-          ? actionError.message
-          : 'Unable to complete this action.',
-      );
+      setError(toApiError(actionError).message);
     }
-  }, []);
+  }, [isMutating]);
 
   function openCreateForm() {
     setEditingTicket(null);
@@ -137,7 +152,7 @@ function TicketDashboardContent({
 
   function handleTicketSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    runAction(() => {
+    void runAction(async () => {
       if (editingTicket) {
         const details: TicketDetailsDraft = {
           subject: draft.subject,
@@ -145,9 +160,11 @@ function TicketDashboardContent({
           priority: draft.priority,
           assignedTo: draft.assignedTo,
         };
-        editTicket(editingTicket.id, details);
+        await updateTicketDetails({
+          user, ticketId: editingTicket.id, details, scenario,
+        }).unwrap();
       } else {
-        addTicket(draft);
+        await createTicket({ user, ticket: draft, scenario }).unwrap();
       }
       closeTicketForm();
     }, editingTicket ? 'Ticket updated.' : 'Ticket created.');
@@ -160,9 +177,12 @@ function TicketDashboardContent({
 
   function handleDelete() {
     if (!ticketToDelete) return;
-    runAction(() => removeTicket(ticketToDelete.id), `${ticketToDelete.id} deleted.`);
-    deleteModal.close();
-    setTicketToDelete(null);
+    const deletedTicket = ticketToDelete;
+    void runAction(async () => {
+      await deleteTicket({ user, ticketId: deletedTicket.id, scenario }).unwrap();
+      deleteModal.close();
+      setTicketToDelete(null);
+    }, `${deletedTicket.id} deleted.`);
   }
 
   const canCreate = checkPermission('createTicket');
@@ -208,9 +228,12 @@ function TicketDashboardContent({
             aria-label={`Assign ${ticket.id}`}
             className="support-ticket-select"
             value={ticket.assignedTo ?? ''}
+            disabled={isMutating}
             onChange={(event) =>
-              runAction(
-                () => reassignTicket(ticket.id, event.target.value || null),
+              void runAction(
+                () => assignTicket({
+                  user, ticketId: ticket.id, assignedTo: event.target.value || null, scenario,
+                }).unwrap(),
                 `${ticket.id} assignment updated.`,
               )
             }
@@ -229,9 +252,13 @@ function TicketDashboardContent({
           aria-label={`Priority for ${ticket.id}`}
           className="support-ticket-select"
           value={ticket.priority}
+          disabled={isMutating}
           onChange={(event) =>
-            runAction(
-              () => changePriority(ticket.id, event.target.value as TicketPriority),
+            void runAction(
+              () => updateTicketPriority({
+                user, ticketId: ticket.id,
+                priority: event.target.value as TicketPriority, scenario,
+              }).unwrap(),
               `${ticket.id} priority updated.`,
             )
           }
@@ -256,9 +283,13 @@ function TicketDashboardContent({
           aria-label={`Status for ${ticket.id}`}
           className="support-ticket-select"
           value={ticket.status}
+          disabled={isMutating}
           onChange={(event) =>
-            runAction(
-              () => changeStatus(ticket.id, event.target.value as TicketStatus),
+            void runAction(
+              () => updateTicketStatus({
+                user, ticketId: ticket.id,
+                status: event.target.value as TicketStatus, scenario,
+              }).unwrap(),
               `${ticket.id} status updated.`,
             )
           }
@@ -271,10 +302,12 @@ function TicketDashboardContent({
     agents,
     canAssign,
     canSetPriority,
-    changePriority,
-    changeStatus,
-    reassignTicket,
     runAction,
+    assignTicket,
+    scenario,
+    updateTicketPriority,
+    updateTicketStatus,
+    user,
   ]);
   const renderTicketActions = useCallback((ticket: Ticket) => (
     <div className="support-row-actions">
@@ -320,6 +353,11 @@ function TicketDashboardContent({
           {checkPermission('viewAdminDashboard') && (
             <Link className="support-nav-link" to="/admin">
               <span aria-hidden="true">⚙</span> Administration
+            </Link>
+          )}
+          {checkPermission('manageUsers') && (
+            <Link className="support-nav-link" to="/users">
+              <span aria-hidden="true">♙</span> User management
             </Link>
           )}
           {checkPermission('viewAdminDashboard') && (
@@ -379,7 +417,9 @@ function TicketDashboardContent({
               <div>
                 <h2>Create ticket</h2>
               </div>
-              <Button variant="primary" onClick={openCreateForm}>Create ticket</Button>
+              <Button variant="primary" onClick={openCreateForm} disabled={isMutating}>
+                Create ticket
+              </Button>
             </div>
           )}
 
@@ -412,6 +452,7 @@ function TicketDashboardContent({
                 <SelectField
                   label="Priority"
                   value={draft.priority}
+                  disabled={isMutating}
                   onChange={(event) =>
                     setDraft({ ...draft, priority: event.target.value as TicketPriority })
                   }
@@ -424,6 +465,7 @@ function TicketDashboardContent({
                 <SelectField
                   label="Assign to"
                   value={draft.assignedTo ?? ''}
+                  disabled={isMutating}
                   onChange={(event) =>
                     setDraft({ ...draft, assignedTo: event.target.value || null })
                   }
@@ -435,7 +477,9 @@ function TicketDashboardContent({
               </Modal.Body>
               <Modal.Footer>
                 <Button variant="secondary" onClick={closeTicketForm}>Cancel</Button>
-                <SubmitButton>{editingTicket ? 'Save changes' : 'Add ticket'}</SubmitButton>
+                <SubmitButton isLoading={isMutating}>
+                  {editingTicket ? 'Save changes' : 'Add ticket'}
+                </SubmitButton>
               </Modal.Footer>
             </Form>
           </Modal>
@@ -461,32 +505,55 @@ function TicketDashboardContent({
                 placeholder="Search tickets"
                 onChange={(event) => setSearchTerm(event.target.value)}
               />
+              <SelectField
+                label="API failure simulation"
+                value={scenario}
+                onChange={(event) => setScenario(event.target.value as TicketApiScenario)}
+                options={[
+                  { value: 'healthy', label: 'Healthy demo API' },
+                  { value: 'slow', label: 'Slow response (loading state)' },
+                  { value: 'network', label: 'Network unavailable' },
+                  { value: 'unavailable', label: 'Service unavailable (503)' },
+                  { value: 'unauthorized', label: 'Expired session (401)' },
+                  { value: 'forbidden', label: 'Forbidden (403)' },
+                  { value: 'validation', label: 'Validation failure (mutations)' },
+                ]}
+              />
               {isSearchPending && (
                 <span className="sr-only" role="status">Updating ticket results</span>
               )}
             </div>
-            <DataTable
-              data={filteredTickets}
-              columns={columns}
-              getRowId={(ticket) => ticket.id}
-              virtualized={filteredTickets.length >= 100}
-              tableClassName="support-ticket-table"
-              className="support-table-scroll"
-              caption="Customer support tickets"
-              emptyMessage={(
-                <div className="support-empty">
-                  <h3>No tickets found</h3>
-                  <p>Try changing your search or filters to find tickets.</p>
-                </div>
-              )}
-              pagination={{
-                page: pagination.currentPage,
-                pageSize: pagination.pageSize,
-                totalItems: filteredTickets.length,
-                onPageChange: pagination.setPage,
-              }}
-              rowActions={canDelete || canEdit ? renderTicketActions : undefined}
-            />
+            {isLoading && <LoadingSpinner />}
+            {isFetching && !isLoading && !hasTicketError && (
+              <LoadingSpinner label="Refreshing tickets…" />
+            )}
+            {hasTicketError && (
+              <ApiErrorMessage
+                error={ticketError}
+                onRetry={() => { void refetch(); }}
+                retrying={isFetching}
+              />
+            )}
+            {error && <Alert variant="error" className="support-alert support-alert--error">{error}</Alert>}
+            {!hasTicketError && (
+              <DataTable
+                data={displayedTickets}
+                columns={columns}
+                getRowId={(ticket) => ticket.id}
+                virtualized={filteredTickets.length >= 100}
+                tableClassName="support-ticket-table"
+                className="support-table-scroll"
+                caption="Customer support tickets"
+                emptyMessage={<EmptyState />}
+                pagination={{
+                  page: pagination.currentPage,
+                  pageSize: pagination.pageSize,
+                  totalItems: filteredTickets.length,
+                  onPageChange: pagination.setPage,
+                }}
+                rowActions={canDelete || canEdit ? renderTicketActions : undefined}
+              />
+            )}
           </section>
           <Modal
             open={deleteModal.isOpen}
@@ -517,7 +584,9 @@ function TicketDashboardContent({
               >
                 Cancel
               </Button>
-              <Button variant="primary" onClick={handleDelete}>Delete ticket</Button>
+              <Button variant="primary" onClick={handleDelete} disabled={isMutating}>
+                Delete ticket
+              </Button>
             </Modal.Footer>
           </Modal>
           <p className="support-security-note">
