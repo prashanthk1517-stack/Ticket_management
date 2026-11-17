@@ -1,8 +1,9 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Profiler, Suspense } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { ProtectedRoute } from '../components/layout/ProtectedRoute';
 import { PermissionBasedRoute } from '../components/layout/PermissionBasedRoute';
 import { UnauthorizedPage } from '../pages/UnauthorizedPage';
+import { recordPerformanceMeasurement } from '../monitoring/performanceMonitor';
 
 const LoginPage = lazy(() =>
   import('../features/auth/pages/LoginPage').then((module) => ({
@@ -34,6 +35,19 @@ const UserManagementPage = lazy(() =>
     default: module.UserManagementPage,
   })),
 );
+const MonitoringDashboard = lazy(() =>
+  import('../components/MonitoringDashboard').then((module) => ({
+    default: module.MonitoringDashboard,
+  })),
+);
+
+function recordTicketDashboardRender(
+  _id: string,
+  _phase: 'mount' | 'update' | 'nested-update',
+  actualDuration: number,
+): void {
+  recordPerformanceMeasurement('Ticket dashboard render', actualDuration);
+}
 
 function RouteLoadingFallback() {
   return (
@@ -49,7 +63,15 @@ export function AppRoutes() {
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route element={<ProtectedRoute />}>
-          <Route path="/tickets" element={<TicketDashboard />} />
+          <Route
+            path="/tickets"
+            element={
+              <Profiler id="TicketDashboard" onRender={recordTicketDashboardRender}>
+                <TicketDashboard />
+              </Profiler>
+            }
+          />
+          <Route path="/monitoring" element={<MonitoringDashboard />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/unauthorized" element={<UnauthorizedPage />} />
           <Route

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Button,
@@ -39,6 +39,7 @@ import type {
   TicketPriority,
   TicketStatus,
 } from '../../../types/ticket.types';
+import { recordPerformanceMeasurement } from '../../../monitoring/performanceMonitor';
 
 const emptyDraft: NewTicket = {
   subject: '',
@@ -77,6 +78,7 @@ function TicketDashboardContent({
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  const searchStartedAt = useRef<number | null>(null);
   const debouncedSearch = useDebounce(searchTerm, 250);
   const isSearchPending = searchTerm !== debouncedSearch;
   const [scenario, setScenario] = useState<TicketApiScenario>('healthy');
@@ -113,6 +115,14 @@ function TicketDashboardContent({
   useEffect(() => {
     pagination.setPage(1);
   }, [debouncedSearch, pagination.setPage]);
+  useEffect(() => {
+    if (searchStartedAt.current === null) return;
+    recordPerformanceMeasurement(
+      'Ticket search responsiveness',
+      performance.now() - searchStartedAt.current,
+    );
+    searchStartedAt.current = null;
+  }, [debouncedSearch]);
 
   const runAction = useCallback(async (action: () => Promise<unknown>, message: string) => {
     setError('');
@@ -368,6 +378,9 @@ function TicketDashboardContent({
           <Link className="support-nav-link" to="/settings">
             <span aria-hidden="true">⚙</span> Settings
           </Link>
+          <Link className="support-nav-link" to="/monitoring">
+            <span aria-hidden="true">◷</span> Monitoring
+          </Link>
         </nav>
         <div className="support-sidebar-footer">
           <p>Demo workspace</p>
@@ -503,7 +516,10 @@ function TicketDashboardContent({
                 type="search"
                 value={searchTerm}
                 placeholder="Search tickets"
-                onChange={(event) => setSearchTerm(event.target.value)}
+                onChange={(event) => {
+                  searchStartedAt.current = performance.now();
+                  setSearchTerm(event.target.value);
+                }}
               />
               <SelectField
                 label="API failure simulation"

@@ -75,6 +75,18 @@ When a backend contract becomes available, replace the local base-query adapter 
 
 Ticket request-state screenshots are in [`screenshots/`](./screenshots/): [loading](./screenshots/tickets-loading.png), [network error](./screenshots/tickets-error.png), and [success](./screenshots/tickets-success.png).
 
+### Frontend monitoring demo
+
+- `src/monitoring/logger.ts` is the structured console logger. It adds ISO timestamps, accepts only a small allowlist of operational context fields, and omits debug output in production. Passwords, tokens, user names/emails, request bodies, and headers are not accepted as log context.
+- `src/components/ErrorBoundary.tsx` catches React render/lifecycle errors and shows a reload fallback. `src/monitoring/errorReporter.ts` also listens for browser `error` and `unhandledrejection` events. As usual, Error Boundaries do not catch event-handler errors or arbitrary asynchronous failures; those should be handled at their call site.
+- `src/monitoring/apiMonitor.ts` wraps the RTK Query base query, recording operation, inferred method, normalized status, duration, and success/failure. It measures the query including configured retries and does not inspect request arguments. Since this repository uses a local demo transport, successful operations have a synthetic `200` status and do not represent HTTP traffic.
+- `src/monitoring/performanceMonitor.ts` records supported navigation/paint/interaction entries, ticket dashboard React Profiler render durations, and ticket-search responsiveness. Browser support varies; unavailable entry types are simply not reported.
+- `/monitoring` displays in-memory request counters and recent samples, failing-operation frequencies, performance measurements, and safe application error metadata. Data is capped/held in memory and disappears on reload; it is demonstration telemetry, not persistent production monitoring.
+- In development, the monitoring page includes a button to deliberately throw during render and verify the Error Boundary. In production, that test control is omitted.
+- No Sentry or other external reporter is configured and nothing is sent off-device. To integrate one, add its maintained SDK through the package manager, initialize it only with public/non-secret configuration, and adapt `reportApplicationError` / `reportApiFailure` to send a scrubbed allowlisted event. Configure SDK-side data scrubbing and sampling, keep credentials server-side, and verify consent/privacy requirements before enabling transmission.
+
+Monitoring screenshots: [dashboard overview](./screenshots/monitoring-dashboard.png) and [successful and failed API activity](./screenshots/monitoring-api-activity.png).
+
 ### Security model and verification
 
 The demo has no `.env` files, API keys, JWTs or production secrets. Its `supportdesk.auth` local-storage value is only a mock identity used to exercise routes; it is editable and must never be treated as proof of authentication. `VITE_*` values are bundled into client code, so only public configuration such as a non-secret API origin belongs there.

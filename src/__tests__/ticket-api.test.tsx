@@ -14,6 +14,11 @@ import {
   useGetTicketsQuery,
 } from '../features/tickets/services/ticketApi';
 import type { NewTicket } from '../types/ticket.types';
+import {
+  clearApiMeasurements,
+  getApiSummary,
+} from '../monitoring/apiMonitor';
+import { clearApplicationErrors } from '../monitoring/errorReporter';
 
 const { password: _password, ...admin } = demoAccounts[0];
 const newTicket: NewTicket = {
@@ -79,6 +84,37 @@ afterEach(() => {
 });
 
 describe('ticket API reliability', () => {
+  it('records successful and failed RTK Query operations without exposing request data', async () => {
+    clearApiMeasurements();
+    clearApplicationErrors();
+    setup('healthy');
+
+    expect(await screen.findByText(
+      'Unable to reset account password',
+      {},
+      { timeout: 5000 },
+    )).not.toBeNull();
+    expect(getApiSummary()).toMatchObject({
+      totalRequests: 1,
+      successfulRequests: 1,
+      failedRequests: 0,
+    });
+
+    cleanup();
+    clearApiMeasurements();
+    setup('network');
+    expect(await screen.findByText(
+      'Unable to reach the service. Check your connection and try again.',
+      {},
+      { timeout: 5000 },
+    )).not.toBeNull();
+    expect(getApiSummary()).toMatchObject({
+      totalRequests: 1,
+      successfulRequests: 0,
+      failedRequests: 1,
+    });
+  });
+
   it('loads the successful ticket response and exposes its initial loading state', async () => {
     setup('slow');
 
