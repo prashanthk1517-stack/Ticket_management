@@ -109,14 +109,15 @@ React escapes rendered strings by default; keep ticket subjects/customers as tex
 ## Performance and frontend security
 
 - Ticket search waits 250 ms before filtering and uses RTK Query arguments so superseded searches can be cancelled; role-scoped ticket counts are memoized.
-- The shared `DataTable` uses TanStack Virtual for ticket result sets of 100 or more. It keeps pagination at 50 rows and mounts only the visible rows plus overscan, with stable ticket IDs as React keys. Fixed ticket-row sizing keeps the virtual scroll offsets predictable. The existing React Compiler and memoized ticket column/callback props avoid adding blanket `React.memo` wrappers.
-- Login, ticket, employee, team/admin dashboard, and settings pages are loaded through route-level dynamic imports with an accessible Suspense fallback. The production build reports separate page chunks.
-- The app has no image assets and no real HTTP ticket API. The RTK Query demo adapter models ticket requests locally; it makes no network requests. The remote Google Fonts import was removed in favor of system fonts, avoiding a third-party font request and font-induced layout shifts.
+- The shared `DataTable` loads TanStack Virtual only for ticket result sets of 100 or more. It keeps pagination at 50 rows and mounts only the visible rows plus overscan, with stable ticket IDs as React keys. Fixed ticket-row sizing keeps the virtual scroll offsets predictable.
+- Login, ticket, employee, team/admin dashboard, user management, settings, and monitoring pages are loaded through route-level dynamic imports with a reusable accessible Suspense fallback. The root Error Boundary catches rejected route/component imports and offers a reload action. The employee table is shared rather than split into a tiny extra chunk.
+- There is no reports route or chart component in the current project; no placeholder reports route or chart dependency was added.
+- The app has no runtime image assets and no real HTTP ticket API. The RTK Query demo adapter models ticket requests locally; it makes no network requests. The remote Google Fonts import was removed in favor of system fonts, avoiding a third-party font request and font-induced layout shifts.
 - No `dangerouslySetInnerHTML` is used; React renders user-entered ticket text as text. Client validation and role-gated controls are UX only, not authorization. The demo identity is stored in `localStorage` and must not be used for real credentials or tokens. Production authentication and authorization belong on the backend; HTTPS, CSRF protections for cookie sessions, and CSP response headers must be configured by the production API/hosting environment. Do not put secrets in `VITE_*` variables.
 
-### Measured bundle comparison
+### Prior route-splitting comparison
 
-The production build immediately before these optimizations emitted one JavaScript entry chunk at **361.42 kB raw / 115.67 kB gzip**. The build after route splitting emits an initial entry chunk at **224.69 kB raw / 70.64 kB gzip** (about 38% smaller in both measures), with page code in separate chunks, including TicketDashboard at **15.46 kB raw / 5.31 kB gzip**.
+In an earlier route-splitting pass, the production build immediately before that work emitted one JavaScript entry chunk at **361.42 kB raw / 115.67 kB gzip**. That pass emitted an initial entry chunk at **224.69 kB raw / 70.64 kB gzip** (about 38% smaller in both measures), with page code in separate chunks, including TicketDashboard at **15.46 kB raw / 5.31 kB gzip**. Those historical values use a different baseline and are not the before/after comparison for the current pass below.
 
 One Lighthouse 12.8.2 run on each production `/login` page, on the same local Chrome machine and default Lighthouse throttling, measured:
 
@@ -132,7 +133,33 @@ One Lighthouse 12.8.2 run on each production `/login` page, on the same local Ch
 
 These are single-run local login-page measurements, not production user data. Lighthouse's lab run did not collect INP. The accessibility audit found a low-contrast login text issue and brand-label mismatch before the fix; both were resolved and the final login audit passed. React DevTools Profiler recordings have not been captured. The localStorage mock has no API traffic to compare.
 
-`npm audit --omit=dev` reports no production dependency vulnerabilities. The full audit reports four moderate findings through the ESLint/minimatch development-tooling dependency chain; npm's suggested automatic fix would downgrade ESLint across a major version, so it was not applied.
+### Bundle optimization pass (November 17, 2026)
+
+The comparison below uses the production build immediately before this pass as the baseline. Both builds were measured with `npm run build -- --manifest --sourcemap`; the initial JavaScript graph is the entry plus its transitive static imports, excluding route/component `dynamicImports`. Vite reports each file's raw and gzip size; graph totals are sums of those rounded values. Source maps were used only to attribute modules and are not part of the production output.
+
+| Measurement | Before this pass | After this pass |
+|---|---:|---:|
+| Entry JavaScript file | 232.32 kB raw / 73.80 kB gzip | 234.43 kB raw / 74.04 kB gzip |
+| Initial static JavaScript graph | ~366.98 kB raw / ~121.62 kB gzip | ~362.38 kB raw / ~119.62 kB gzip |
+| CSS | 30.32 kB raw / 7.01 kB gzip | 30.42 kB raw / 7.02 kB gzip |
+| Employee dashboard route chunk | 25.50 kB raw / 8.88 kB gzip | 25.51 kB raw / 8.84 kB gzip |
+| Shared virtualizer chunk | 47.95 kB raw / 14.82 kB gzip (included TanStack Virtual) | 16.59 kB raw / 5.89 kB gzip, with virtualization in a separate on-demand chunk |
+
+The entry file alone grew slightly because Vite repartitioned shared modules. The more relevant initial static graph decreased by about **1.3% raw** and **1.6% gzip**; this is a measured, modest change rather than a claim of a large startup reduction. The separate `VirtualizedRows` chunk is **34.56 kB raw / 10.37 kB gzip** and is requested only when the table's existing 100-row virtualization threshold is met. On employee pages and smaller ticket lists, that dependency is not downloaded. If a ticket list exceeds the threshold, that route pays the extra on-demand request to virtualize it.
+
+The build exposed an ineffective lazy import: importing hooks through `features/auth/index.ts` also pulled `LoginPage` into the eager graph. Internal production imports now target the auth hooks/services directly; `LoginPage` is a real dynamic route chunk (**4.51 kB raw / 2.08 kB gzip**). Route navigation continues to load page modules only when visited. `/` still redirects to `/tickets`; unauthenticated access redirects to `/login`.
+
+Two unused packages, `@tailwindcss/vite` and `tailwindcss`, were removed after confirming there are no Tailwind directives, classes, or plugin setup in the app. This reduces installed/development dependencies (12 packages removed in total), but did not change browser bytes because neither package was in the production bundle.
+
+Bundle review opportunities, based on the emitted chunks:
+
+1. RTK Query core/middleware is currently in the initial static graph because the global store imports `baseApi`; consider dynamic reducer/middleware registration if a lighter login-only startup is needed.
+2. The React Compiler runtime is about **38.33 kB raw / 13.80 kB gzip** in the initial graph. Measure its runtime benefit against a build without the compiler before deciding whether to keep it.
+3. Global performance/error monitoring is initialized at startup. If startup cost becomes material, evaluate deferring non-critical instrumentation while preserving error coverage.
+
+No duplicate React or React DOM package versions were found in the production dependency tree. No report/chart library is installed; there is no chart code to tree-shake. The bundle-size chart is [available as a screenshot](./screenshots/bundle-analysis-before-after.png), with its source report at [bundle-analysis.html](./screenshots/bundle-analysis.html).
+
+`npm audit --omit=dev` reports no production dependency vulnerabilities. The dependency removal reported three moderate findings in development tooling; npm's suggested automatic fix would downgrade ESLint across a major version, so it was not applied.
 
 ### Frontend system design
 

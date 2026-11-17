@@ -1,8 +1,12 @@
-import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
-import { useVirtualizer } from '@tanstack/react-virtual';
+import { lazy, Suspense, useMemo, useRef, useState, type ReactNode } from 'react';
+import { LoadingFallback } from '../../LoadingFallback';
 import { Loader } from '../Feedback';
 
-const estimateTicketRowHeight = () => 56;
+const VirtualizedRows = lazy(() =>
+  import('./VirtualizedRows').then((module) => ({
+    default: module.VirtualizedRows,
+  })),
+);
 
 export interface ColumnDefinition<T> {
   key: keyof T | string;
@@ -108,7 +112,6 @@ export function DataTable<T>({
 
   const [internalPage, setInternalPage] = useState(1);
   const scrollElementRef = useRef<HTMLDivElement>(null);
-  const getScrollElement = useCallback(() => scrollElementRef.current, []);
   const pageSize = pagination?.pageSize ?? (data.length || 10);
   const currentPage = pagination?.page ?? internalPage;
 
@@ -134,19 +137,6 @@ export function DataTable<T>({
   }, [pagination, pageSize, safePage, sortedData]);
 
   const visibleRows = pagination ? paginatedData : sortedData;
-  const virtualizer = useVirtualizer({
-    count: virtualized ? visibleRows.length : 0,
-    getScrollElement,
-    estimateSize: estimateTicketRowHeight,
-    initialRect: { width: 800, height: 520 },
-    overscan: 6,
-    enabled: virtualized,
-  });
-  const virtualItems = virtualized ? virtualizer.getVirtualItems() : [];
-  const topSpacerHeight = virtualItems[0]?.start ?? 0;
-  const bottomSpacerHeight = virtualized && virtualItems.length
-    ? Math.max(0, virtualizer.getTotalSize() - (virtualItems.at(-1)?.end ?? 0))
-    : 0;
 
   const handleSort = (column: ColumnDefinition<T>) => {
     if (!column.sortable) return;
@@ -180,6 +170,51 @@ export function DataTable<T>({
     const rowId = rowSelection.getRowId?.(row) ?? getRowId?.(row) ?? JSON.stringify(row) ?? '';
     const isSelected = selectedIds.includes(rowId);
     rowSelection.onSelect(row, !isSelected);
+  };
+
+  const renderRow = (rowIndex: number) => {
+    const row = visibleRows[rowIndex];
+    if (!row) return null;
+    const rowId = getRowId?.(row) ?? JSON.stringify(row) ?? String(rowIndex);
+    const isSelected = rowSelection ? selectedIds.includes(rowId) : false;
+
+    return (
+      <tr
+        key={rowId}
+        data-index={virtualized ? rowIndex : undefined}
+        aria-rowindex={virtualized
+          ? (safePage - 1) * pageSize + rowIndex + 2
+          : undefined}
+        onClick={() => onRowClick?.(row, rowIndex)}
+      >
+        {selectionEnabled && (
+          <td>
+            <input
+              type="checkbox"
+              aria-label={`Select row ${rowId}`}
+              checked={isSelected}
+              onChange={() => toggleCheck(row)}
+              onClick={(event) => event.stopPropagation()}
+            />
+          </td>
+        )}
+        {columns.map((column) => {
+          const value = getColumnValue(row, column);
+          const content = column.render
+            ? column.render(value, row, rowIndex)
+            : value == null
+              ? '—'
+              : String(value);
+
+          return (
+            <td key={`${rowId}-${String(column.key)}`} data-label={column.dataLabel}>
+              {content}
+            </td>
+          );
+        })}
+        {rowActions && <td>{rowActions(row, rowIndex)}</td>}
+      </tr>
+    );
   };
 
   if (loading) {
@@ -233,70 +268,27 @@ export function DataTable<T>({
             </tr>
           </thead>
           <tbody>
-            {virtualized && topSpacerHeight > 0 && (
-              <tr aria-hidden="true">
-                <td
-                  colSpan={columns.length + Number(selectionEnabled) + Number(Boolean(rowActions))}
-                  style={{ height: topSpacerHeight, padding: 0, border: 0 }}
-                />
-              </tr>
-            )}
-            {(virtualized
-              ? virtualItems.map((item) => item.index)
-              : visibleRows.map((_, index) => index)
-            ).map((rowIndex) => {
-              const row = visibleRows[rowIndex];
-              const virtualItem = virtualized ? virtualItems.find((item) => item.index === rowIndex) : undefined;
-              if (!row) return null;
-              const rowId = getRowId?.(row) ?? JSON.stringify(row) ?? String(rowIndex);
-              const isSelected = rowSelection ? selectedIds.includes(rowId) : false;
-
-              return (
-                <tr
-                  key={rowId}
-                  data-index={virtualItem?.index}
-                  aria-rowindex={virtualized
-                    ? (safePage - 1) * pageSize + rowIndex + 2
-                    : undefined}
-                  onClick={() => onRowClick?.(row, rowIndex)}
-                >
-                  {selectionEnabled && (
-                    <td>
-                      <input
-                        type="checkbox"
-                        aria-label={`Select row ${rowId}`}
-                        checked={isSelected}
-                        onChange={() => toggleCheck(row)}
-                        onClick={(event) => event.stopPropagation()}
+            {virtualized ? (
+              <Suspense
+                fallback={(
+                  <tr>
+                    <td colSpan={columns.length + Number(selectionEnabled) + Number(Boolean(rowActions))}>
+                      <LoadingFallback
+                        className="component-loading"
+                        message="Loading large result set…"
                       />
                     </td>
-                  )}
-                  {columns.map((column) => {
-                    const value = getColumnValue(row, column);
-                    const content = column.render
-                      ? column.render(value, row, rowIndex)
-                      : value == null
-                        ? '—'
-                        : String(value);
-
-                    return (
-                      <td key={`${rowId}-${String(column.key)}`} data-label={column.dataLabel}>
-                        {content}
-                      </td>
-                    );
-                  })}
-                  {rowActions && <td>{rowActions(row, rowIndex)}</td>}
-                </tr>
-              );
-            })}
-            {virtualized && bottomSpacerHeight > 0 && (
-              <tr aria-hidden="true">
-                <td
-                  colSpan={columns.length + Number(selectionEnabled) + Number(Boolean(rowActions))}
-                  style={{ height: bottomSpacerHeight, padding: 0, border: 0 }}
+                  </tr>
+                )}
+              >
+                <VirtualizedRows
+                  count={visibleRows.length}
+                  columnCount={columns.length + Number(selectionEnabled) + Number(Boolean(rowActions))}
+                  renderRow={renderRow}
+                  scrollElementRef={scrollElementRef}
                 />
-              </tr>
-            )}
+              </Suspense>
+            ) : visibleRows.map((_, rowIndex) => renderRow(rowIndex))}
           </tbody>
         </table>
       </div>

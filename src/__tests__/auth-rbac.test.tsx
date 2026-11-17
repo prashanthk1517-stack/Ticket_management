@@ -253,6 +253,55 @@ describe('role permissions and ticket visibility', () => {
     expect(screen.getByText('admin@support.test')).not.toBeNull();
   });
 
+  it('loads the employee table on the employee route', async () => {
+    const [administrator] = demoAccounts;
+    window.localStorage.setItem('supportdesk.auth', JSON.stringify({
+      id: administrator.id,
+      name: administrator.name,
+      email: administrator.email,
+      role: administrator.role,
+    }));
+
+    render(
+      <MemoryRouter initialEntries={['/employees']}>
+        <Provider store={createAppStore()}><AppRoutes /></Provider>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole(
+      'heading',
+      { name: 'Employee directory' },
+      { timeout: 5000 },
+    )).not.toBeNull();
+    expect(await screen.findByRole(
+      'table',
+      { name: 'Employee directory' },
+      { timeout: 5000 },
+    )).not.toBeNull();
+  });
+
+  it('loads monitoring only when its protected route is visited', async () => {
+    const [administrator] = demoAccounts;
+    window.localStorage.setItem('supportdesk.auth', JSON.stringify({
+      id: administrator.id,
+      name: administrator.name,
+      email: administrator.email,
+      role: administrator.role,
+    }));
+
+    render(
+      <MemoryRouter initialEntries={['/monitoring']}>
+        <Provider store={createAppStore()}><AppRoutes /></Provider>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole(
+      'heading',
+      { name: 'Monitoring dashboard' },
+      { timeout: 5000 },
+    )).not.toBeNull();
+  });
+
   it('creates, edits, and confirms deletion through reusable ticket dialogs', async () => {
     const user = userEvent.setup();
     window.localStorage.setItem('supportdesk.auth', JSON.stringify({

@@ -194,8 +194,8 @@
 .support-settings dt { color: #888e9c; font-size: 11px; }
 .support-settings dd { color: #303440; font-size: 13px; margin: 0; }
 .support-settings > p { border-top: 1px solid #eff0f4; color: #888e9c; font-size: 11px; line-height: 1.6; margin: 18px 0 0; padding-top: 14px; }
-.route-loading { align-items: center; display: flex; justify-content: center; min-height: 100vh; }
-.route-loading p { color: #656b79; font-size: 13px; }
+.route-loading { align-items: center; color: #656b79; display: flex; font-size: 13px; justify-content: center; min-height: 100vh; }
+.component-loading { align-items: center; color: #656b79; display: flex; font-size: 12px; justify-content: center; min-height: 180px; }
 .monitoring-dashboard { max-width: 1180px; }
 .monitoring-dashboard > p:not(.eyebrow) { color: #888e9c; font-size: 12px; }
 .monitor-panel {

@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { useAuth } from '../../auth';
+import { useAuth } from '../../auth/hooks/useAuth';
 import { useTickets } from '../../tickets';
 
 export function RoleOverview({ title, description }: {

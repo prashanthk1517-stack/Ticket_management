@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from 'react';
 import { useAppDispatch, useAppSelector } from '../../../app/hooks';
-import { demoAccounts } from '../../auth';
+import { demoAccounts } from '../../auth/services/authService';
 import {
   assignTicket,
   createTicket,

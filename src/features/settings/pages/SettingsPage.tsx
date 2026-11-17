@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
-import { getRoleLabel, useAuth } from '../../auth';
+import { useAuth } from '../../auth/hooks/useAuth';
+import { getRoleLabel } from '../../auth/services/authService';
 
 export function SettingsPage() {
   const { user } = useAuth();

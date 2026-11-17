@@ -17,7 +17,8 @@ import {
   calculateEmployeeStats,
   filterAndSortEmployees,
 } from '../utils/employee.utils';
-import { getRoleLabel, useAuth } from '../../auth';
+import { useAuth } from '../../auth/hooks/useAuth';
+import { getRoleLabel } from '../../auth/services/authService';
 import type { AuthUser } from '../../../types/auth.types';
 
 const initialFilters: EmployeeFiltersState = {

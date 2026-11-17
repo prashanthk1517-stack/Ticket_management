@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useState } from 'react';
@@ -102,7 +102,7 @@ describe('DataTable', () => {
     expect(onSelect).toHaveBeenCalledWith(people[0], true);
   });
 
-  it('virtualizes large datasets so only a small window of rows is mounted', () => {
+  it('loads virtualization on demand and mounts a small window of rows', async () => {
     vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockImplementation(function (this: HTMLElement) {
       return this.classList.contains('data-table__scroll') ? 520 : 0;
     });
@@ -121,9 +121,11 @@ describe('DataTable', () => {
         caption="Large ticket list"
       />,
     );
-    const renderedRows = container.querySelectorAll('tbody tr[data-index]');
-    expect(renderedRows.length).toBeGreaterThan(0);
-    expect(renderedRows.length).toBeLessThan(30);
+    await waitFor(() => {
+      const renderedRows = container.querySelectorAll('tbody tr[data-index]');
+      expect(renderedRows.length).toBeGreaterThan(0);
+      expect(renderedRows.length).toBeLessThan(30);
+    });
   });
 });
 

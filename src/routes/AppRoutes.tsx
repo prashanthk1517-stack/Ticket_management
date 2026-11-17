@@ -2,6 +2,7 @@ import { lazy, Profiler, Suspense } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { ProtectedRoute } from '../components/layout/ProtectedRoute';
 import { PermissionBasedRoute } from '../components/layout/PermissionBasedRoute';
+import { LoadingFallback } from '../components/LoadingFallback';
 import { UnauthorizedPage } from '../pages/UnauthorizedPage';
 import { recordPerformanceMeasurement } from '../monitoring/performanceMonitor';
 
@@ -49,17 +50,9 @@ function recordTicketDashboardRender(
   recordPerformanceMeasurement('Ticket dashboard render', actualDuration);
 }
 
-function RouteLoadingFallback() {
-  return (
-    <main className="route-loading" aria-busy="true">
-      <p role="status">Loading page…</p>
-    </main>
-  );
-}
-
 export function AppRoutes() {
   return (
-    <Suspense fallback={<RouteLoadingFallback />}>
+    <Suspense fallback={<LoadingFallback />}>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route element={<ProtectedRoute />}>

@@ -16,7 +16,9 @@ import {
   EmptyState,
   LoadingSpinner,
 } from '../../../components/ui';
-import { getRoleLabel, useAuth, usePermissions } from '../../auth';
+import { useAuth } from '../../auth/hooks/useAuth';
+import { usePermissions } from '../../auth/hooks/usePermissions';
+import { getRoleLabel } from '../../auth/services/authService';
 import { useDebounce } from '../../../hooks/useDebounce';
 import { useModal } from '../../../hooks/useModal';
 import { usePagination } from '../../../hooks/usePagination';
