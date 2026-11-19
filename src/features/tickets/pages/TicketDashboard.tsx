@@ -7,6 +7,7 @@ import {
   DataTable,
   Form,
   FormError,
+  FormActions,
   InputField,
   Modal,
   SelectField,
@@ -444,12 +445,13 @@ function TicketDashboardContent({
             ariaLabelledBy="ticket-form-title"
             size="md"
           >
-            <Form onSubmit={handleTicketSubmit} className="support-create-form">
-              <Modal.Header id="ticket-form-title">
-                <h2>{editingTicket ? 'Edit ticket' : 'Create ticket'}</h2>
-              </Modal.Header>
-              <Modal.Body>
-                <FormError message={error} />
+            <Modal.Content>
+              <Form onSubmit={handleTicketSubmit} className="support-create-form">
+                <Modal.Header id="ticket-form-title">
+                  <h2>{editingTicket ? 'Edit ticket' : 'Create ticket'}</h2>
+                </Modal.Header>
+                <Modal.Body>
+                  <FormError message={error} />
                 <InputField
                   label="Subject"
                   required
@@ -489,14 +491,17 @@ function TicketDashboardContent({
                     ...agents.map((agent) => ({ value: agent.id, label: agent.name })),
                   ]}
                 />
-              </Modal.Body>
-              <Modal.Footer>
-                <Button variant="secondary" onClick={closeTicketForm}>Cancel</Button>
-                <SubmitButton isLoading={isMutating}>
-                  {editingTicket ? 'Save changes' : 'Add ticket'}
-                </SubmitButton>
-              </Modal.Footer>
-            </Form>
+                </Modal.Body>
+                <Modal.Footer>
+                  <FormActions>
+                    <Button variant="secondary" onClick={closeTicketForm}>Cancel</Button>
+                    <SubmitButton isLoading={isMutating}>
+                      {editingTicket ? 'Save changes' : 'Add ticket'}
+                    </SubmitButton>
+                  </FormActions>
+                </Modal.Footer>
+              </Form>
+            </Modal.Content>
           </Modal>
           {!isOpen && <FormError message={error} />}
           {notice && <Alert variant="success" className="support-alert">{notice}</Alert>}
@@ -583,29 +588,33 @@ function TicketDashboardContent({
             role="alertdialog"
             size="sm"
           >
-            <Modal.Header id="delete-ticket-title">
-              <h2>Delete ticket?</h2>
-            </Modal.Header>
-            <Modal.Body>
-              <p>
-                Are you sure you want to delete <strong>{ticketToDelete?.id}</strong>
-                {ticketToDelete ? `: ${ticketToDelete.subject}` : ''}? This action cannot be undone.
-              </p>
-            </Modal.Body>
-            <Modal.Footer>
-              <Button
-                variant="secondary"
-                onClick={() => {
-                  deleteModal.close();
-                  setTicketToDelete(null);
-                }}
-              >
-                Cancel
-              </Button>
-              <Button variant="primary" onClick={handleDelete} disabled={isMutating}>
-                Delete ticket
-              </Button>
-            </Modal.Footer>
+            <Modal.Content>
+              <Modal.Header id="delete-ticket-title">
+                <h2>Delete ticket?</h2>
+              </Modal.Header>
+              <Modal.Body>
+                <p>
+                  Are you sure you want to delete <strong>{ticketToDelete?.id}</strong>
+                  {ticketToDelete ? `: ${ticketToDelete.subject}` : ''}? This action cannot be undone.
+                </p>
+              </Modal.Body>
+              <Modal.Footer>
+                <FormActions>
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      deleteModal.close();
+                      setTicketToDelete(null);
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button variant="primary" onClick={handleDelete} disabled={isMutating}>
+                    Delete ticket
+                  </Button>
+                </FormActions>
+              </Modal.Footer>
+            </Modal.Content>
           </Modal>
           <p className="support-security-note">
             Demo only: the UI and client-side permission checks improve the workflow, but do not

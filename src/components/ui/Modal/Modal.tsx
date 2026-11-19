@@ -1,6 +1,12 @@
 import {
+  createContext,
+  isValidElement,
+  useContext,
+  useEffect,
   useLayoutEffect,
   useRef,
+  useState,
+  type ButtonHTMLAttributes,
   type HTMLAttributes,
   type PropsWithChildren,
   type ReactNode,
@@ -16,6 +22,50 @@ export interface ModalProps {
   ariaLabelledBy?: string;
   role?: 'dialog' | 'alertdialog';
   className?: string;
+}
+
+interface ModalContextValue {
+  open: boolean;
+  openModal: () => void;
+  close: () => void;
+  size: ModalProps['size'];
+  closeOnOverlayClick: boolean;
+  ariaLabel?: string;
+  ariaLabelledBy?: string;
+  role?: 'dialog' | 'alertdialog';
+  className?: string;
+}
+
+const ModalContext = createContext<ModalContextValue | null>(null);
+
+function useModalContext(): ModalContextValue {
+  const context = useContext(ModalContext);
+  if (!context) throw new Error('Modal compound components must be used inside Modal.');
+  return context;
+}
+
+export interface ModalTriggerProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+  children: ReactNode;
+}
+
+function ModalTrigger({ children, onClick, type = 'button', ...props }: ModalTriggerProps) {
+  const { open, openModal } = useModalContext();
+  return (
+    <button
+      type={type}
+      aria-haspopup="dialog"
+      aria-expanded={open}
+      onClick={(event) => {
+        onClick?.(event);
+        if (!event.defaultPrevented) {
+          openModal();
+        }
+      }}
+      {...props}
+    >
+      {children}
+    </button>
+  );
 }
 
 const sizeClassNames = {
@@ -50,7 +100,7 @@ function ModalFooter({
 }
 
 function ModalContent({
-  open = false,
+  open,
   onClose,
   children,
   size = 'md',
@@ -60,12 +110,21 @@ function ModalContent({
   role = 'dialog',
   className = '',
 }: ModalProps) {
+  const context = useContext(ModalContext);
+  const resolvedOpen = context?.open ?? open ?? false;
+  const resolvedClose = context?.close ?? onClose;
+  const resolvedSize = context?.size ?? size;
+  const resolvedCloseOnOverlay = context?.closeOnOverlayClick ?? closeOnOverlayClick;
+  const resolvedAriaLabel = context?.ariaLabel ?? ariaLabel;
+  const resolvedAriaLabelledBy = context?.ariaLabelledBy ?? ariaLabelledBy;
+  const resolvedRole = context?.role ?? role;
+  const resolvedClassName = context?.className ?? className;
   const dialogRef = useRef<HTMLDivElement>(null);
-  const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
+  const onCloseRef = useRef(resolvedClose);
+  onCloseRef.current = resolvedClose;
 
   useLayoutEffect(() => {
-    if (!open) return;
+    if (!resolvedOpen) return;
 
     const previouslyFocused = document.activeElement instanceof HTMLElement
       ? document.activeElement
@@ -124,24 +183,33 @@ function ModalContent({
       document.removeEventListener('keydown', handleKeyDown);
       previouslyFocused?.focus();
     };
-  }, [open]);
+  }, [resolvedOpen]);
 
-  if (!open) return null;
+  useEffect(() => {
+    if (!resolvedOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [resolvedOpen]);
+
+  if (!resolvedOpen) return null;
 
   return (
     <div
       className="modal-overlay"
       onClick={(event) => {
-        if (closeOnOverlayClick && event.target === event.currentTarget) onClose?.();
+        if (resolvedCloseOnOverlay && event.target === event.currentTarget) resolvedClose?.();
       }}
     >
       <div
         ref={dialogRef}
-        className={`modal ${sizeClassNames[size]} ${className}`.trim()}
-        role={role}
+        className={`modal ${sizeClassNames[resolvedSize ?? 'md']} ${resolvedClassName}`.trim()}
+        role={resolvedRole}
         aria-modal="true"
-        aria-label={ariaLabel ?? (ariaLabelledBy ? undefined : 'Dialog')}
-        aria-labelledby={ariaLabelledBy}
+        aria-label={resolvedAriaLabel ?? (resolvedAriaLabelledBy ? undefined : 'Dialog')}
+        aria-labelledby={resolvedAriaLabelledBy}
         tabIndex={-1}
       >
         {children}
@@ -150,7 +218,67 @@ function ModalContent({
   );
 }
 
-export const Modal = Object.assign(ModalContent, {
+function ModalRoot({
+  open: controlledOpen,
+  onClose,
+  size = 'md',
+  closeOnOverlayClick = true,
+  children,
+  ariaLabel,
+  ariaLabelledBy,
+  role,
+  className,
+}: ModalProps) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const resolvedOpen = controlledOpen ?? internalOpen;
+
+  const close = () => {
+    setInternalOpen(false);
+    onClose?.();
+  };
+  const openModal = () => {
+    setInternalOpen(true);
+  };
+
+  const hasCompoundContent = Array.isArray(children)
+    ? children.some((child) => isValidElement(child) && child.type === ModalContent)
+    : isValidElement(children) && children.type === ModalContent;
+
+  return (
+    <ModalContext.Provider
+      value={{
+        open: resolvedOpen,
+        openModal,
+        close,
+        size,
+        closeOnOverlayClick,
+        ariaLabel,
+        ariaLabelledBy,
+        role,
+        className,
+      }}
+    >
+      {hasCompoundContent ? children : (
+        <ModalContent
+          open={resolvedOpen}
+          onClose={close}
+          size={size}
+          closeOnOverlayClick={closeOnOverlayClick}
+          ariaLabel={ariaLabel}
+          ariaLabelledBy={ariaLabelledBy}
+          role={role}
+          className={className}
+        >
+          {children}
+        </ModalContent>
+      )}
+    </ModalContext.Provider>
+  );
+}
+
+export const Modal = Object.assign(ModalRoot, {
+  Trigger: ModalTrigger,
+  Content: ModalContent,
   Header: ModalHeader,
   Body: ModalBody,
   Footer: ModalFooter,

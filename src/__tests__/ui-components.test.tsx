@@ -1,9 +1,12 @@
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { DataTable, Modal } from '../components/ui';
 import { usePagination } from '../hooks/usePagination';
+import { useDebounce } from '../hooks/useDebounce';
+import { useOutsideClick } from '../hooks/useOutsideClick';
+import { useToggle } from '../hooks/useToggle';
 
 afterEach(() => {
   cleanup();
@@ -165,5 +168,93 @@ describe('Modal', () => {
 
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(document.activeElement).toBe(trigger);
+  });
+
+  it('supports the compound Trigger and Content API', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <Modal ariaLabelledBy="compound-modal-title" size="sm">
+        <Modal.Trigger>Open compound modal</Modal.Trigger>
+        <Modal.Content>
+          <Modal.Header id="compound-modal-title">Compound dialog</Modal.Header>
+          <Modal.Body>Compound modal body</Modal.Body>
+          <Modal.Footer>
+            <button type="button">Cancel</button>
+          </Modal.Footer>
+        </Modal.Content>
+      </Modal>,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Open compound modal' }));
+    expect(screen.getByRole('dialog')).not.toBeNull();
+    expect(screen.getByText('Compound modal body')).not.toBeNull();
+
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+});
+
+describe('Reusable hooks', () => {
+  it('debounces a changing value', async () => {
+    vi.useFakeTimers();
+
+    function DebounceExample() {
+      const [value, setValue] = useState('');
+      const debouncedValue = useDebounce(value, 200);
+      return (
+        <>
+          <input aria-label="Search" value={value} onChange={(event) => setValue(event.target.value)} />
+          <span>{debouncedValue || 'waiting'}</span>
+        </>
+      );
+    }
+
+    render(<DebounceExample />);
+    fireEvent.change(screen.getByRole('textbox', { name: 'Search' }), {
+      target: { value: 'ticket' },
+    });
+    act(() => {
+      vi.advanceTimersByTime(199);
+    });
+    expect(screen.getByText('waiting')).not.toBeNull();
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(screen.getByText('ticket')).not.toBeNull();
+    vi.useRealTimers();
+  });
+
+  it('toggles boolean UI state', () => {
+    function ToggleExample() {
+      const { isOpen, toggle, close } = useToggle();
+      return (
+        <>
+          <button type="button" onClick={toggle}>Toggle</button>
+          <button type="button" onClick={close}>Close</button>
+          <span>{isOpen ? 'open' : 'closed'}</span>
+        </>
+      );
+    }
+
+    render(<ToggleExample />);
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle' }));
+    expect(screen.getByText('open')).not.toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    expect(screen.getByText('closed')).not.toBeNull();
+  });
+
+  it('detects outside clicks and cleans up listeners', () => {
+    const outside = vi.fn();
+
+    function OutsideExample() {
+      const ref = useRef<HTMLDivElement>(null);
+      useOutsideClick(ref, outside);
+      return <div ref={ref}>Inside</div>;
+    }
+
+    render(<OutsideExample />);
+    fireEvent.pointerDown(document.body);
+    expect(outside).toHaveBeenCalledTimes(1);
   });
 });

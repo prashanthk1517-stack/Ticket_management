@@ -3,3 +3,4 @@ export * from './useDebounce';
 export * from './useModal';
 export * from './usePagination';
 export * from './useToggle';
+export * from './useOutsideClick';

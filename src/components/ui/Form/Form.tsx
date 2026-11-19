@@ -44,3 +44,21 @@ export function Form({
     </form>
   );
 }
+
+export interface FormActionsProps {
+  children: ReactNode;
+  className?: string;
+  align?: 'left' | 'right';
+}
+
+export function FormActions({
+  children,
+  className = '',
+  align = 'right',
+}: FormActionsProps) {
+  return (
+    <div className={`form-actions form-actions--${align} ${className}`.trim()}>
+      {children}
+    </div>
+  );
+}

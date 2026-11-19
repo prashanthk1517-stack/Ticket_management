@@ -1,5 +1,12 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Button, Form, InputField, SelectField, SubmitButton } from '../../../components/ui';
+import {
+  Button,
+  Form,
+  FormActions,
+  InputField,
+  SelectField,
+  SubmitButton,
+} from '../../../components/ui';
 import type { Employee, EmployeeDraft, EmploymentStatus } from '../types/employee.types';
 
 interface EmployeeFormProps {
@@ -163,10 +170,10 @@ export function EmployeeForm({
           required
         />
       </div>
-      <div className="form-actions">
+      <FormActions>
         <Button variant="secondary" onClick={onCancel}>Cancel</Button>
         <SubmitButton>{isEditing ? 'Save changes' : 'Add employee'}</SubmitButton>
-      </div>
+      </FormActions>
     </Form>
   );
 }

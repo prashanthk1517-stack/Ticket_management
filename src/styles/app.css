@@ -293,6 +293,7 @@ tbody tr:nth-child(4n + 4) .avatar { background: #e4eef9; color: #4a77a2; }
 .employee-form .form-actions { margin-top: 23px; }
 .required-mark { color: #d34b45; }
 .form-actions { display: flex; gap: 9px; justify-content: flex-end; margin-top: 23px; }
+.form-actions--left { justify-content: flex-start; }
 .confirm-icon { align-items: center; background: #fff0ee; border-radius: 50%; color: #d45b4f; display: flex; height: 42px; justify-content: center; width: 42px; }
 .confirm-icon svg { fill: none; height: 21px; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.7; width: 21px; }
 .sr-only { clip: rect(0, 0, 0, 0); clip-path: inset(50%); height: 1px; overflow: hidden; position: absolute; white-space: nowrap; width: 1px; }

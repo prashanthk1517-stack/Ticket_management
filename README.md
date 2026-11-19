@@ -1,5 +1,19 @@
 # PeopleDesk and SupportDesk — Management Dashboard
 
+## Architecture refactoring
+
+See [`ARCHITECTURE.md`](./ARCHITECTURE.md) for the shared/feature component
+dependency diagram and state communication model. Reusable patterns include:
+
+- Generic `DataTable<T>` with sorting, controlled/inline pagination, loading,
+  empty state, custom cell rendering, row selection, and row actions.
+- Compound `Modal` with trigger, content, header, body, footer, focus trap,
+  Escape/backdrop closing, body scroll locking, and size variants.
+- Reusable `InputField`, `SelectField`, `TextAreaField`, `CheckboxField`,
+  `FormActions`, and native strong TypeScript props.
+- `useDebounce`, `useToggle`, `useModal`, `usePagination`, and
+  `useOutsideClick` for reusable UI behavior.
+
 A responsive employee directory and customer-support ticket dashboard built with React, TypeScript, and CSS. Both use mock data and browser storage; no backend is required.
 
 ## Run locally

@@ -1,2 +1,2 @@
-export { Form, FormError, SubmitButton } from './Form';
-export type { FormErrorProps, SubmitButtonProps } from './Form';
+export { Form, FormActions, FormError, SubmitButton } from './Form';
+export type { FormActionsProps, FormErrorProps, SubmitButtonProps } from './Form';
